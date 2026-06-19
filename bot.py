@@ -43,60 +43,60 @@ MATCH_KEYWORDS = ["It's a match!", "Jenis kelamin", "Ketertarikan:", "Match foun
 
 # Expanded fallback templates
 FALLBACK_TEMPLATES = [
-    "Mau ngobrol sambil main catur atau UNO? Cari aja @ІиѕтaиtТаlkBот ♟️🎮",
+    "Mau ngobrol sambil main catur atau UNO? Cari aja ІиѕтaиtТаlkBот ♟️🎮",
 
-    "Gabut parah? Mending mabar UNO di @ÌñßtâñtTâlkBôt bareng orang random! 🃏",
+    "Gabut parah? Mending mabar UNO di ÌñßtâñtTâlkBôt bareng orang random! 🃏",
 
-    "Cari temen ngobrol dari luar negeri? Langsung ke @ІnѕtаntTаlkBоt 🌍✨",
+    "Cari temen ngobrol dari luar negeri? Langsung ke ІnѕtаntTаlkBоt 🌍✨",
 
-    "Main catur sambil curhat santai? Coba aja @ΙnѕtаntΤаlkΒοt 😎",
+    "Main catur sambil curhat santai? Coba aja ΙnѕtаntΤаlkΒοt 😎",
 
-    "Daripada bengong, gas main game gratis di @I_n_s_t_a_n_t_T_a_l_k_B_o_t 🎲",
+    "Daripada bengong, gas main game gratis di I_n_s_t_a_n_t_T_a_l_k_B_o_t 🎲",
 
-    "Tempatnya orang gabut nyari temen sefrekuensi 🤝 👉 @ІñѕтäñтTälkBöт",
+    "Tempatnya orang gabut nyari temen sefrekuensi 🤝 👉 ІñѕтäñтTälkBöт",
 
-    "Bosan chat yang itu-itu aja? Klik @ÌnѕtаntTаlkßot ada game serunya! 🎯",
+    "Bosan chat yang itu-itu aja? Klik ÌnѕtаntTаlkßot ada game serunya! 🎯",
 
-    "Ngobrol anonim tapi bisa sambil main UNO? Cuma di @ІиѕтaиtТаlkBот 🃏🔥",
+    "Ngobrol anonim tapi bisa sambil main UNO? Cuma di ІnѕтantТаlkBот 🃏🔥",
 
-    "Lagi nyari lawan catur yang seru? Temukan di @ÌñßtâñtTâlkBôt ♟️",
+    "Lagi nyari lawan catur yang seru? Temukan di ÌñstâñtTâlkBôt ♟️",
 
-    "Pengen lancar bahasa Inggris? Cari temen chat global di @ІnѕtаntTаlkBоt 🗣️",
+    "Pengen lancar bahasa Inggris? Cari temen chat global di ІnѕtаntTаlkBоt 🗣️",
 
-    "Chatting anti garing, ada game pendamping 😌 👉 @ΙnѕtаntΤаlkΒοt",
+    "Chatting anti garing, ada game pendamping 😌 👉 ΙnѕtаntΤаlkΒοt",
 
-    "Scroll mulu kagak nemu jodoh? Coba peruntunganmu di @I_n_s_t_a_n_t_T_a_l_k_B_o_t 💀",
+    "Scroll mulu kagak nemu jodoh? Coba peruntunganmu di I_n_s_t_a_n_t_T_a_l_k_B_o_t 💀",
 
-    "Bukan sekadar anon chat biasa, cobain sendiri keseruannya @ІñѕтäñтTälkBöт ✅",
+    "Bukan sekadar anon chat biasa, cobain sendiri keseruannya ІñѕтäñтTälkBöт ✅",
 
-    "Mabar UNO atau catur gratis tanpa download aplikasi? Ke @ÌnѕtаntTаlkßot aja 📱",
+    "Mabar UNO atau catur gratis tanpa download aplikasi? Ke ÌnѕtаntTаlkßot aja 📱",
 
-    "Nyari temen curhat yang asik dan gak ribet? Langsung @ІиѕтaиtТаlkBот 🙌",
+    "Nyari temen curhat yang asik dan gak ribet? Langsung ІnѕтantТаlkBот 🙌",
 
-    "Vibes-nya adem, no mesum-mesum club 😤 👉 @ÌñßtâñtTâlkBôt",
+    "Vibes-nya adem, no mesum-mesum club 😤 👉 ÌñßtâñtTâlkBôt",
 
-    "Stress ngerjain tugas? Refreshing bentar di @ІnѕtаntTаlkBоt 😭",
+    "Stress ngerjain tugas? Refreshing bentar di ІnѕtаntTаlkBоt 😭",
 
-    "Chat random tercepat dan paling aman, klik @ΙnѕtаntΤаlkΒοt ⚡",
+    "Chat random tercepat dan paling aman, klik ΙnѕtаntΤаlkΒοt ⚡",
 
-    "Gabut malam-malam? Ada ribuan orang stand by di @I_n_s_t_a_n_t_T_a_l_k_B_o_t 🌙",
+    "Gabut malam-malam? Ada ribuan orang stand by di I_n_s_t_a_n_t_T_a_l_k_B_o_t 🌙",
 
-    "Main game bareng stranger dari mana aja? Cek @ІñѕтäñтTälkBöт 👾",
+    "Main game bareng stranger dari mana aja? Cek ІñѕтäñтTälkBöт 👾",
 
-    "Bikin hari gabutmu jadi seru lewat game & chat di @ÌnѕtаntTаlkßot 💥",
+    "Bikin hari gabutmu jadi seru lewat game & chat di ÌnѕtаntTаlkßot 💥",
 
-    "Bebas skip sampai nemu yang beneran cocok! 👉 @ІиѕтaиtТаlkBот 😌",
+    "Bebas skip sampai nemu yang beneran cocok! 👉 ІnѕтantТаlkBот 😌",
 
-    "Temen lagi sibuk semua? Cari temen baru di @ÌñßtâñtTâlkBôt 😏",
+    "Temen lagi sibuk semua? Cari temen baru di ÌñstâñtTâlkBôt 😏",
 
-    "Komunitas chat random paling asik, buruan gabung @ІnѕtаntTаlkBоt 🚀",
+    "Komunitas chat random paling asik, buruan gabung ІnѕtаntTаlkBоt 🚀",
 
-    "Mau skip atau lanjut? Kendali penuh di tanganmu 🎮 👉 @ΙnѕtаntΤаlkΒοt"
+    "Mau skip atau lanjut? Kendali penuh di tanganmu 🎮 👉 ΙnѕtаntΤаlkΒοt"
 ]
 
 # Short promo messages for variety
 SHORT_PROMOS = [
-    "Anon chat simple & seru 👉 @instanttalkbot"
+    "Anon chat simple & seru 👉 instanttalkb0t"
 ]
 
 # LOGGING
