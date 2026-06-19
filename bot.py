@@ -43,56 +43,57 @@ MATCH_KEYWORDS = ["It's a match!", "Jenis kelamin", "Ketertarikan:", "Match foun
 
 # Expanded fallback templates
 FALLBACK_TEMPLATES = [
-"coba bot gue ka @instanttalkbot 😎",
+    "Mau ngobrol sambil main catur atau UNO? Cari aja @ІиѕтaиtТаlkBот ♟️🎮",
 
-"Ngobrol anonim, bebas skip, 100% aman 👉 @instanttalkbot",
+    "Gabut parah? Mending mabar UNO di @ÌñßtâñtTâlkBôt bareng orang random! 🃏",
 
-"Cari temen curhat? @instanttalkbot solusinya! 😌",
+    "Cari temen ngobrol dari luar negeri? Langsung ke @ІnѕtаntTаlkBоt 🌍✨",
 
-"coba bot gue ka @instanttalkbot 💀",
+    "Main catur sambil curhat santai? Coba aja @ΙnѕtаntΤаlkΒοt 😎",
 
-"Lagi overthinking? Coba ngobrol di @instanttalkbot 😭",
+    "Daripada bengong, gas main game gratis di @I_n_s_t_a_n_t_T_a_l_k_B_o_t 🎲",
 
-"Jomblo? Gabut? Pake @instanttalkbot aja 😗",
+    "Tempatnya orang gabut nyari temen sefrekuensi 🤝 👉 @ІñѕтäñтTälkBöт",
 
-"Anon chat versi sopan & seru? Jawabannya @instanttalkbot ✅",
+    "Bosan chat yang itu-itu aja? Klik @ÌnѕtаntTаlkßot ada game serunya! 🎯",
 
-"Klik @instanttalkbot dan mulai ngobrol sekarang! 💬",
+    "Ngobrol anonim tapi bisa sambil main UNO? Cuma di @ІиѕтaиtТаlkBот 🃏🔥",
 
-"Gabut? Coba @instanttalkbot buat ngobrol sama orang random 😎",
+    "Lagi nyari lawan catur yang seru? Temukan di @ÌñßtâñtTâlkBôt ♟️",
 
-"Ngobrol anonim, bebas skip, 100% aman 👉 @instanttalkbot 💀",
+    "Pengen lancar bahasa Inggris? Cari temen chat global di @ІnѕtаntTаlkBоt 🗣️",
 
-"Cari temen baru tiap hari? coba @instanttalkbot 😌",
+    "Chatting anti garing, ada game pendamping 😌 👉 @ΙnѕtаntΤаlkΒοt",
 
-"Tempat nyari temen, bukan buat mesum 😤 👉 @instanttalkbot",
+    "Scroll mulu kagak nemu jodoh? Coba peruntunganmu di @I_n_s_t_a_n_t_T_a_l_k_B_o_t 💀",
 
-"Ngobrol random tanpa ribet? langsung ke @instanttalkbot 😎",
+    "Bukan sekadar anon chat biasa, cobain sendiri keseruannya @ІñѕтäñтTälkBöт ✅",
 
-"Capek diem? ngobrol aja di @instanttalkbot 💬",
+    "Mabar UNO atau catur gratis tanpa download aplikasi? Ke @ÌnѕtаntTаlkßot aja 📱",
 
-"Anon chat tapi lebih nyaman 😌 👉 @instanttalkbot",
+    "Nyari temen curhat yang asik dan gak ribet? Langsung @ІиѕтaиtТаlkBот 🙌",
 
-"Scroll terus tapi tetep gabut? 😭 @instanttalkbot aja",
+    "Vibes-nya adem, no mesum-mesum club 😤 👉 @ÌñßtâñtTâlkBôt",
 
-"Ngobrol santai sama stranger? @instanttalkbot tempatnya 😋",
+    "Stress ngerjain tugas? Refreshing bentar di @ІnѕtаntTаlkBоt 😭",
 
-"coba bot gue ka @instanttalkbot (lagi) 💀",
+    "Chat random tercepat dan paling aman, klik @ΙnѕtаntΤаlkΒοt ⚡",
 
-"butuh temen ngobrol? langsung ke @instanttalkbot 😌",
+    "Gabut malam-malam? Ada ribuan orang stand by di @I_n_s_t_a_n_t_T_a_l_k_B_o_t 🌙",
 
-"Random chat + vibes adem 😎 👉 @instanttalkbot",
+    "Main game bareng stranger dari mana aja? Cek @ІñѕтäñтTälkBöт 👾",
 
-"bosen? coba @instanttalkbot sekarang juga 💬",
+    "Bikin hari gabutmu jadi seru lewat game & chat di @ÌnѕtаntTаlkßot 💥",
 
-"Ngobrol bebas skip & aman ✅ @instanttalkbot",
+    "Bebas skip sampai nemu yang beneran cocok! 👉 @ІиѕтaиtТаlkBот 😌",
 
-"cari temen ngobrol cepet? @instanttalkbot aja 😏",
+    "Temen lagi sibuk semua? Cari temen baru di @ÌñßtâñtTâlkBôt 😏",
 
-"ga ada kerjaan? 😭 @instanttalkbot solusinya",
+    "Komunitas chat random paling asik, buruan gabung @ІnѕtаntTаlkBоt 🚀",
 
-"Anon chat simple & seru 👉 @instanttalkbot"
+    "Mau skip atau lanjut? Kendali penuh di tanganmu 🎮 👉 @ΙnѕtаntΤаlkΒοt"
 ]
+
 # Short promo messages for variety
 SHORT_PROMOS = [
     "Anon chat simple & seru 👉 @instanttalkbot"
