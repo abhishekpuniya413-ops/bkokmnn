@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: telegram-promo-bot
+    env: python
+    region: oregon
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: python bot.py
+    envVars:
+      - key: API_ID
+        sync: false
+      - key: API_HASH
+        sync: false
+      - key: PHONE_NUMBER
+        sync: false
+      - key: SESSION_STRING
+        sync: false
+      - key: TARGET_BOT
+        value: "@AnonyMeetBot"
+      - key: PROMO_BOT
+        value: "t.me/InstantTalkBot"
+      - key: SESSION_NAME
+        value: "onAnonBot"
