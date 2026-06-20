@@ -10,6 +10,13 @@ import time
 from typing import Set, Dict
 from telethon import TelegramClient, events
 
+# LOGGING (Configured early to prevent startup parsing errors)
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+
 # CONFIGURATION - Use environment variables for security
 API_ID = int(os.getenv('API_ID', '0'))
 API_HASH = os.getenv('API_HASH', '')
@@ -21,7 +28,6 @@ SESSION_NAME = os.getenv('SESSION_NAME', 'onAnonBot')
 PORT = int(os.getenv('PORT', 10000))
 
 # Multiple target bots with individual delay settings - configurable via environment
-# Format: {"@BotName": {"min_delay": 5.0, "max_delay": 12.0}, ...}
 DEFAULT_TARGET_BOTS = {
     '@AnonyMeetBot': {'min_delay': 5.0, 'max_delay': 12.0},
     '@random_pacar_bot': {'min_delay': 9.0, 'max_delay': 13.0},
@@ -43,68 +49,36 @@ MATCH_KEYWORDS = ["It's a match!", "Jenis kelamin", "Ketertarikan:", "Match foun
 
 # Expanded fallback templates
 FALLBACK_TEMPLATES = [
-    "Mau ngobrol sambil main catur atau UNO? Cari aja ІиѕтaиtТаlkBот ♟️🎮",
-
-    "Gabut parah? Mending mabar UNO di ÌñßtâñtTâlkBôt bareng orang random! 🃏",
-
-    "Cari temen ngobrol dari luar negeri? Langsung ke ІnѕtаntTаlkBоt 🌍✨",
-
-    "Main catur sambil curhat santai? Coba aja ΙnѕtаntΤаlkΒοt 😎",
-
-    "Daripada bengong, gas main game gratis di I_n_s_t_a_n_t_T_a_l_k_B_o_t 🎲",
-
-    "Tempatnya orang gabut nyari temen sefrekuensi 🤝 👉 ІñѕтäñтTälkBöт",
-
-    "Bosan chat yang itu-itu aja? Klik ÌnѕtаntTаlkßot ada game serunya! 🎯",
-
-    "Ngobrol anonim tapi bisa sambil main UNO? Cuma di ІnѕтantТаlkBот 🃏🔥",
-
-    "Lagi nyari lawan catur yang seru? Temukan di ÌñstâñtTâlkBôt ♟️",
-
-    "Pengen lancar bahasa Inggris? Cari temen chat global di ІnѕtаntTаlkBоt 🗣️",
-
-    "Chatting anti garing, ada game pendamping 😌 👉 ΙnѕtаntΤаlkΒοt",
-
-    "Scroll mulu kagak nemu jodoh? Coba peruntunganmu di I_n_s_t_a_n_t_T_a_l_k_B_o_t 💀",
-
-    "Bukan sekadar anon chat biasa, cobain sendiri keseruannya ІñѕтäñтTälkBöт ✅",
-
-    "Mabar UNO atau catur gratis tanpa download aplikasi? Ke ÌnѕtаntTаlkßot aja 📱",
-
-    "Nyari temen curhat yang asik dan gak ribet? Langsung ІnѕтantТаlkBот 🙌",
-
-    "Vibes-nya adem, no mesum-mesum club 😤 👉 ÌñßtâñtTâlkBôt",
-
-    "Stress ngerjain tugas? Refreshing bentar di ІnѕtаntTаlkBоt 😭",
-
-    "Chat random tercepat dan paling aman, klik ΙnѕtаntΤаlkΒοt ⚡",
-
-    "Gabut malam-malam? Ada ribuan orang stand by di I_n_s_t_a_n_t_T_a_l_k_B_o_t 🌙",
-
-    "Main game bareng stranger dari mana aja? Cek ІñѕтäñтTälkBöт 👾",
-
-    "Bikin hari gabutmu jadi seru lewat game & chat di ÌnѕtаntTаlkßot 💥",
-
-    "Bebas skip sampai nemu yang beneran cocok! 👉 ІnѕтantТаlkBот 😌",
-
-    "Temen lagi sibuk semua? Cari temen baru di ÌñstâñtTâlkBôt 😏",
-
-    "Komunitas chat random paling asik, buruan gabung ІnѕtаntTаlkBоt 🚀",
-
-    "Mau skip atau lanjut? Kendali penuh di tanganmu 🎮 👉 ΙnѕtаntΤаlkΒοt"
+"Cari InstantTalkBot di Telegram buat ngobrol random sambil main catur atau UNO ♟️🎮",
+"Gabut parah? Cari InstantTalkBot di Telegram dan mabar UNO bareng orang random! 🃏",
+"Cari temen ngobrol dari luar negeri? Cari InstantTalkBot di Telegram 🌍✨",
+"Main catur sambil curhat santai? Cari InstantTalkBot di Telegram 😎",
+"Daripada bengong, cari InstantTalkBot di Telegram dan main game gratis 🎲",
+"Lagi nyari temen ngobrol yang nyambung? Cari InstantTalkBot di Telegram 🤝",
+"Bosan chat yang itu-itu aja? Cari InstantTalkBot di Telegram, ada game serunya! 🎯",
+"Ngobrol anonim tapi bisa sambil main UNO? Cari InstantTalkBot di Telegram 🃏🔥",
+"Lagi nyari lawan catur yang seru? Cari InstantTalkBot di Telegram ♟️",
+"Pengen lancar bahasa Inggris? Cari temen chat global di InstantTalkBot lewat Telegram 🗣️",
+"Chatting anti garing? Cari InstantTalkBot di Telegram 😌",
+"Scroll mulu? Cari InstantTalkBot di Telegram dan kenalan sama orang baru 💀",
+"Bukan sekadar anon chat biasa, cari InstantTalkBot di Telegram dan rasain sendiri keseruannya ✅",
+"Mabar UNO atau catur gratis tanpa download aplikasi? Cari InstantTalkBot di Telegram 📱",
+"Nyari temen curhat yang asik dan gak ribet? Cari InstantTalkBot di Telegram 🙌",
+"Vibes-nya adem, no mesum-mesum club 😤 Cari InstantTalkBot di Telegram",
+"Stress ngerjain tugas? Refreshing bentar, cari InstantTalkBot di Telegram 😭",
+"Chat random cepat dan aman? Cari InstantTalkBot di Telegram ⚡",
+"Gabut malam-malam? Cari InstantTalkBot di Telegram, selalu ada yang online 🌙",
+"Main game bareng stranger dari mana aja? Cari InstantTalkBot di Telegram 👾",
+"Bikin hari gabutmu jadi seru lewat game & chat di InstantTalkBot 💥",
+"Bebas skip sampai nemu yang beneran cocok! Cari InstantTalkBot di Telegram 😌",
+"Temen lagi sibuk semua? Cari temen baru di InstantTalkBot lewat Telegram 😏",
+"Komunitas chat random paling asik, cari InstantTalkBot di Telegram 🚀",
+"Mau skip atau lanjut? Kendali penuh di tanganmu 🎮 Cari InstantTalkBot di Telegram"
 ]
 
-# Short promo messages for variety
 SHORT_PROMOS = [
     "Anon chat simple & seru 👉 instanttalkb0t"
 ]
-
-# LOGGING
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
 
 # UTILITY FUNCTIONS
 def is_match_message(message_text: str) -> bool:
@@ -119,14 +93,8 @@ def get_random_delay(bot_username: str = None) -> float:
         bot_config = TARGET_BOTS[bot_username]
         min_delay = bot_config['min_delay']
         max_delay = bot_config['max_delay']
-        delay = random.uniform(min_delay, max_delay)
-        logger.debug(f"⏰ Custom delay for {bot_username}: {delay:.1f}s (range: {min_delay}-{max_delay}s)")
-        return delay
-    else:
-        # Default delay range if bot not found or no bot specified
-        default_delay = random.uniform(5.0, 12.0)
-        logger.debug(f"⏰ Default delay: {default_delay:.1f}s")
-        return default_delay
+        return random.uniform(min_delay, max_delay)
+    return random.uniform(5.0, 12.0)
 
 def generate_random_message(bot_username: str) -> str:
     """Generate a random promotional message"""
@@ -134,23 +102,17 @@ def generate_random_message(bot_username: str) -> str:
         message_counters[bot_username] = 0
     message_counters[bot_username] += 1
 
-    # 30% chance for short message, 70% for long message
     if random.random() < 0.3:
         template = random.choice(SHORT_PROMOS)
     else:
         template = random.choice(FALLBACK_TEMPLATES)
 
-    # Format the message
     message = template.format(bot=PROMO_BOT)
-
-    # Add variation to avoid exact duplicates
     message_key = f"{bot_username}:{message}"
+    
     if message_key in used_messages:
         variations = [
-            f"{message} ✨",
-            f"{message} 🔥",
-            f"{message} 💯",
-            f"{message} ({message_counters[bot_username]})"
+            f"{message} ✨", f"{message} 🔥", f"{message} 💯", f"{message} ({message_counters[bot_username]})"
         ]
         message = random.choice(variations)
 
@@ -161,20 +123,14 @@ def generate_random_message(bot_username: str) -> str:
 def validate_config():
     """Validate required environment variables"""
     required_vars = ['API_ID', 'API_HASH', 'PHONE_NUMBER']
-    missing_vars = []
-    
-    for var in required_vars:
-        if not os.getenv(var):
-            missing_vars.append(var)
+    missing_vars = [var for var in required_vars if not os.getenv(var)]
     
     if missing_vars:
         logger.error(f"❌ Missing required environment variables: {', '.join(missing_vars)}")
         return False
-    
     if API_ID == 0:
         logger.error("❌ API_ID must be a valid integer")
         return False
-    
     return True
 
 # STATISTICS CLASS
@@ -184,16 +140,13 @@ class BotStatistics:
         self.start_time = time.time()
 
     def record_match(self, bot_username: str):
-        if bot_username in self.stats:
-            self.stats[bot_username]['matches'] += 1
+        if bot_username in self.stats: self.stats[bot_username]['matches'] += 1
 
     def record_message_sent(self, bot_username: str):
-        if bot_username in self.stats:
-            self.stats[bot_username]['messages_sent'] += 1
+        if bot_username in self.stats: self.stats[bot_username]['messages_sent'] += 1
 
     def record_error(self, bot_username: str):
-        if bot_username in self.stats:
-            self.stats[bot_username]['errors'] += 1
+        if bot_username in self.stats: self.stats[bot_username]['errors'] += 1
 
     def get_stats(self):
         uptime = time.time() - self.start_time
@@ -208,7 +161,6 @@ class BotStatistics:
 # MAIN BOT CLASS
 class MultiTargetTelegramPromoBot:
     def __init__(self):
-        # Use StringSession for cloud deployment
         from telethon.sessions import StringSession
         session_string = os.getenv('SESSION_STRING', '')
         
@@ -220,23 +172,21 @@ class MultiTargetTelegramPromoBot:
         self.target_bot_entities: Dict[str, any] = {}
         self.is_running = True
         self.statistics = BotStatistics()
+        self.timeout_tasks: Dict[str, asyncio.Task] = {}  # Tracks individual bot 60s timeout tasks
 
     async def start(self):
         """Start the bot"""
         try:
-            # Validate configuration
             if not validate_config():
                 raise ValueError("Invalid configuration")
 
             await self.client.start(phone=PHONE_NUMBER)
             logger.info("✅ Telegram client started successfully")
 
-            # Print session string for first-time setup
             if not os.getenv('SESSION_STRING'):
                 session_string = self.client.session.save()
                 logger.info(f"📝 Session string (save this as SESSION_STRING env var): {session_string}")
 
-            # Get all target bot entities
             for bot_username in TARGET_BOTS.keys():
                 try:
                     entity = await self.client.get_entity(bot_username)
@@ -250,22 +200,12 @@ class MultiTargetTelegramPromoBot:
                 logger.error("❌ No target bots found! Exiting...")
                 return
 
-            # Set up message handler for all target bots
             @self.client.on(events.NewMessage(chats=list(self.target_bot_entities.values())))
             async def handle_new_message(event):
                 await self.process_message(event)
 
             logger.info(f"🤖 Started monitoring {len(self.target_bot_entities)} bots for matches...")
-            logger.info("📋 Monitoring bots:")
-            for bot_username in self.target_bot_entities.keys():
-                logger.info(f"   - {bot_username}")
-
-            # Start health check server for Render
             await self.start_health_server()
-
-            logger.info("📱 Bot is now running...")
-
-            # Keep the bot running
             await self.client.run_until_disconnected()
 
         except Exception as e:
@@ -276,8 +216,6 @@ class MultiTargetTelegramPromoBot:
         """Process incoming messages"""
         try:
             message_text = event.message.text or ""
-            
-            # Find which bot sent this message
             sender_bot = None
             for bot_username, entity in self.target_bot_entities.items():
                 if event.chat_id == entity.id:
@@ -287,6 +225,9 @@ class MultiTargetTelegramPromoBot:
             if not sender_bot:
                 return
 
+            # Cancel timeout watcher because the target bot actively sent a message
+            self.cancel_timeout_task(sender_bot)
+
             logger.debug(f"📨 Received from {sender_bot}: {message_text[:50]}...")
 
             if is_match_message(message_text):
@@ -294,7 +235,6 @@ class MultiTargetTelegramPromoBot:
                 self.statistics.record_match(sender_bot)
                 await self.send_promotional_message(sender_bot)
 
-                # Wait before sending /next with bot-specific delay
                 delay = get_random_delay(sender_bot)
                 logger.info(f"⏳ Waiting {delay:.1f}s before /next to {sender_bot}...")
                 await asyncio.sleep(delay)
@@ -302,16 +242,14 @@ class MultiTargetTelegramPromoBot:
 
         except Exception as e:
             logger.error(f"❌ Error processing message: {str(e)}")
-            if 'sender_bot' in locals():
+            if 'sender_bot' in locals() and sender_bot:
                 self.statistics.record_error(sender_bot)
 
     async def send_promotional_message(self, bot_username: str):
         """Send a promotional message to specific bot"""
         try:
             if bot_username not in self.target_bot_entities:
-                logger.error(f"❌ Bot {bot_username} not found in entities")
                 return
-
             promo_message = generate_random_message(bot_username)
             await self.client.send_message(self.target_bot_entities[bot_username], promo_message)
             logger.info(f"✅ Promotional message sent to {bot_username}!")
@@ -321,17 +259,41 @@ class MultiTargetTelegramPromoBot:
             self.statistics.record_error(bot_username)
 
     async def send_next_command(self, bot_username: str):
-        """Send /next command to specific bot"""
+        """Send /next command to specific bot and start response guard"""
         try:
             if bot_username not in self.target_bot_entities:
-                logger.error(f"❌ Bot {bot_username} not found in entities")
                 return
+
+            # Ensure any previous tracking task is cleared before executing next action
+            self.cancel_timeout_task(bot_username)
 
             await self.client.send_message(self.target_bot_entities[bot_username], "/next")
             logger.info(f"✅ Sent /next command to {bot_username}")
+
+            # Fire up a 60-second response monitor task
+            self.timeout_tasks[bot_username] = asyncio.create_task(
+                self.monitor_bot_timeout(bot_username)
+            )
         except Exception as e:
             logger.error(f"❌ Failed to send /next to {bot_username}: {str(e)}")
             self.statistics.record_error(bot_username)
+
+    async def monitor_bot_timeout(self, bot_username: str):
+        """Asynchronously waits 60 seconds; triggers retry if target bot goes silent"""
+        try:
+            await asyncio.sleep(60)
+            logger.warning(f"⏰ No response from {bot_username} for 60s after /next. Sending /next again...")
+            await self.send_next_command(bot_username)
+        except asyncio.CancelledError:
+            # Task was cleared cleanly because the bot responded in time
+            pass
+
+    def cancel_timeout_task(self, bot_username: str):
+        """Safely stops and discards a running timeout watcher"""
+        task = self.timeout_tasks.get(bot_username)
+        if task and not task.done():
+            task.cancel()
+        self.timeout_tasks[bot_username] = None
 
     async def start_health_server(self):
         """Start a simple HTTP server for Render health checks with statistics"""
@@ -341,17 +303,15 @@ class MultiTargetTelegramPromoBot:
             return web.Response(text='Multi-Target Telegram Bot is running!', status=200)
         
         async def stats_endpoint(request):
-            stats = self.statistics.get_stats()
-            return web.json_response(stats)
+            return web.json_response(self.statistics.get_stats())
         
         async def config_endpoint(request):
-            config_info = {
+            return web.json_response({
                 'target_bots': list(TARGET_BOTS.keys()),
                 'bot_configs': TARGET_BOTS,
                 'promo_bot': PROMO_BOT,
                 'connected_bots': len(self.target_bot_entities)
-            }
-            return web.json_response(config_info)
+            })
         
         app = web.Application()
         app.router.add_get('/', health_check)
@@ -364,31 +324,18 @@ class MultiTargetTelegramPromoBot:
         site = web.TCPSite(runner, '0.0.0.0', PORT)
         await site.start()
         logger.info(f"🌐 Health server started on port {PORT}")
-        logger.info(f"📊 Statistics available at: http://localhost:{PORT}/stats")
-        logger.info(f"⚙️ Configuration available at: http://localhost:{PORT}/config")
 
 # MAIN FUNCTION
 async def main():
-    """Main entry point"""
     print("🚀 Starting Multi-Target Telegram Promotional Bot for Render...")
-    print("📋 Configuration:")
-    print(f"   Target Bots & Delays:")
-    for bot_username, config in TARGET_BOTS.items():
-        print(f"     - {bot_username}: {config['min_delay']}-{config['max_delay']}s delay")
-    print(f"   Promo Bot: {PROMO_BOT}")
-    print(f"   Phone: {PHONE_NUMBER}")
-    print(f"   Port: {PORT}")
     print("=" * 50)
-
     bot = MultiTargetTelegramPromoBot()
-
     try:
         await bot.start()
     except KeyboardInterrupt:
         logger.info("⏹️ Bot stopped by user")
     except Exception as e:
         logger.error(f"💥 Bot crashed: {str(e)}")
-        # Keep the process alive for debugging
         await asyncio.sleep(60)
     finally:
         try:
@@ -397,7 +344,6 @@ async def main():
         except:
             pass
 
-# RUN THE BOT
 if __name__ == "__main__":
     try:
         asyncio.run(main())
@@ -405,5 +351,4 @@ if __name__ == "__main__":
         print("\n👋 Goodbye!")
     except Exception as e:
         print(f"❌ Error: {e}")
-        # Keep alive for debugging
         time.sleep(60)
