@@ -226,8 +226,8 @@ class MultiTargetTelegramPromoBot:
             logger.error(f"❌ Failed to start bot: {str(e)}")
             raise
 
-    async def process_message(self, event):
-        """Process incoming messages integrating Script 1 and Script 2 logic"""
+        async def process_message(self, event):
+        """Process incoming messages with prioritized logic"""
         try:
             message_text = event.message.text or ""
             sender_bot = None
@@ -239,46 +239,38 @@ class MultiTargetTelegramPromoBot:
             if not sender_bot:
                 return
 
-            # Cancel timeout watcher because the target bot actively sent a message
             self.cancel_timeout_task(sender_bot)
             logger.debug(f"📨 Received from {sender_bot}: {message_text[:50]}...")
 
-            # ==========================================
-            # INTEGRATED SCRIPT 2 LOGIC (Stickers & Limits)
-            # ==========================================
-            if 'Partner found 😺' in message_text:
-                logger.info(f"{sender_bot}: Partner found. Sending sticker...")
+            # --- PRIORITY 1: STICKER BOT LOGIC (Always checked first) ---
+            # Replace @mutual_chatbot with the actual @username used in your TARGET_BOTS
+            if sender_bot == '@mutual_chatbot' and 'Partner found' in message_text:
+                logger.info(f"🚨 Priority Sticker Task: {sender_bot} found a partner!")
                 await asyncio.sleep(1) 
                 
-                stickers = await self.get_stickers()
-                if len(stickers) >= 2:
-                    await self.client.send_file(event.chat_id, stickers[1])
-                elif len(stickers) >= 1:
-                    await self.client.send_file(event.chat_id, stickers[0])
+                # Check for cached stickers
+                if hasattr(self, 'cached_stickers') and len(self.cached_stickers) > 0:
+                    try:
+                        sticker = self.cached_stickers[1] if len(self.cached_stickers) >= 2 else self.cached_stickers[0]
+                        await self.client.send_file(event.chat_id, sticker)
+                    except Exception as e:
+                        logger.error(f"❌ Failed to send sticker: {e}")
                 
                 await asyncio.sleep(2) 
                 if self.bot2_next_limit_reached:
                     await event.respond('/stop')
                 else:
                     await event.respond('/next') 
-                return # Exit early so Script 1 logic doesn't trigger
+                return # Stop here, do not run promo logic
 
-            elif any(phrase in message_text for phrase in ['You stopped the chat', 'Your partner has stopped the chat', 'Type /search to find a new partner']):
-                logger.info(f"{sender_bot}: Chat ended properly. Searching...")
+            # --- PRIORITY 2: DISCONNECT LOGIC (For Mutual Bot) ---
+            if sender_bot == '@mutual_chatbot' and any(phrase in message_text for phrase in ['You stopped', 'Your partner has stopped', 'Type /search']):
+                logger.info(f"{sender_bot}: Chat ended. Searching...")
                 await asyncio.sleep(1)
                 await event.respond('/search')
                 return
 
-            elif "daily /next limit" in message_text:
-                logger.info(f"{sender_bot}: Daily limit reached. Switching to /stop mode.")
-                self.bot2_next_limit_reached = True
-                await asyncio.sleep(1)
-                await event.respond('/stop')
-                return
-
-            # ==========================================
-            # INTEGRATED SCRIPT 1 LOGIC (Promo Text & Timeouts)
-            # ==========================================
+            # --- PRIORITY 3: PROMO BOT LOGIC (Runs for everything else) ---
             if is_match_message(message_text):
                 logger.info(f"🎯 Match detected from {sender_bot}! Sending promo message...")
                 self.statistics.record_match(sender_bot)
@@ -293,6 +285,7 @@ class MultiTargetTelegramPromoBot:
             logger.error(f"❌ Error processing message: {str(e)}")
             if 'sender_bot' in locals() and sender_bot:
                 self.statistics.record_error(sender_bot)
+                
 
     async def send_promotional_message(self, bot_username: str):
         try:
