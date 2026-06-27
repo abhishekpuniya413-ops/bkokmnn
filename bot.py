@@ -1,4 +1,4 @@
-# Telegram Promotional Bot - Render Deployment Version (Multi-Target)
+# Telegram Promotional Bot - Render Deployment Version (Multi-Target + Sticker Support)
 # Requirements: telethon aiohttp
 
 import asyncio
@@ -9,8 +9,9 @@ import random
 import time
 from typing import Set, Dict
 from telethon import TelegramClient, events
+from telethon.sessions import StringSession
 
-# LOGGING (Configured early to prevent startup parsing errors)
+# LOGGING
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s'
@@ -23,8 +24,7 @@ API_HASH = os.getenv('API_HASH', '')
 PHONE_NUMBER = os.getenv('PHONE_NUMBER', '')
 PROMO_BOT = os.getenv('PROMO_BOT', 't.me/InstantTalkBot')
 SESSION_NAME = os.getenv('SESSION_NAME', 'onAnonBot')
-
-# Add port for Render (required for web services)
+SESSION_STRING = os.getenv('SESSION_STRING', '')
 PORT = int(os.getenv('PORT', 10000))
 
 # Multiple target bots with individual delay settings - configurable via environment
@@ -33,17 +33,32 @@ DEFAULT_TARGET_BOTS = {
     '@random_pacar_bot': {'min_delay': 9.0, 'max_delay': 13.0},
 }
 
-# Parse TARGET_BOTS from environment variable or use default
+# Parse TARGET_BOTS from environment variables (Supports both Script 1 JSON and Script 2 Comma-separated formats)
+TARGET_BOTS = {}
+env_target_bots = os.getenv('TARGET_BOTS', '')
+env_target_bot = os.getenv('TARGET_BOT', '') # Script 2 fallback
+
 try:
-    TARGET_BOTS = json.loads(os.getenv('TARGET_BOTS', '{}'))
+    if env_target_bots.strip().startswith('{'):
+        TARGET_BOTS = json.loads(env_target_bots)
+    elif env_target_bots:
+        TARGET_BOTS = {bot.strip(): {'min_delay': 5.0, 'max_delay': 12.0} for bot in env_target_bots.split(",")}
+        
     if not TARGET_BOTS:
-        TARGET_BOTS = DEFAULT_TARGET_BOTS
-except (json.JSONDecodeError, TypeError):
+        TARGET_BOTS = DEFAULT_TARGET_BOTS.copy()
+except Exception as e:
     logger.warning("⚠️ Invalid TARGET_BOTS format, using defaults")
-    TARGET_BOTS = DEFAULT_TARGET_BOTS
+    TARGET_BOTS = DEFAULT_TARGET_BOTS.copy()
+
+# Ensure Script 2's TARGET_BOT env is also included
+if env_target_bot:
+    for bot in env_target_bot.split(","):
+        bot = bot.strip()
+        if bot and bot not in TARGET_BOTS:
+            TARGET_BOTS[bot] = {'min_delay': 5.0, 'max_delay': 12.0}
 
 # GLOBALS
-message_counters: Dict[str, int] = {}  # Counter per bot
+message_counters: Dict[str, int] = {}
 used_messages: Set[str] = set()
 MATCH_KEYWORDS = ["It's a match!", "Jenis kelamin", "Ketertarikan:", "Match found", "A partner has been found!"]
 
@@ -82,22 +97,17 @@ SHORT_PROMOS = [
 
 # UTILITY FUNCTIONS
 def is_match_message(message_text: str) -> bool:
-    """Check if message indicates a match"""
     if not message_text:
         return False
     return any(keyword.lower() in message_text.lower() for keyword in MATCH_KEYWORDS)
 
 def get_random_delay(bot_username: str = None) -> float:
-    """Get random delay based on bot-specific settings or default range"""
     if bot_username and bot_username in TARGET_BOTS:
         bot_config = TARGET_BOTS[bot_username]
-        min_delay = bot_config['min_delay']
-        max_delay = bot_config['max_delay']
-        return random.uniform(min_delay, max_delay)
+        return random.uniform(bot_config['min_delay'], bot_config['max_delay'])
     return random.uniform(5.0, 12.0)
 
 def generate_random_message(bot_username: str) -> str:
-    """Generate a random promotional message"""
     if bot_username not in message_counters:
         message_counters[bot_username] = 0
     message_counters[bot_username] += 1
@@ -117,19 +127,11 @@ def generate_random_message(bot_username: str) -> str:
         message = random.choice(variations)
 
     used_messages.add(message_key)
-    logger.info(f"Generated message #{message_counters[bot_username]} for {bot_username}: {message[:50]}...")
     return message
 
 def validate_config():
-    """Validate required environment variables"""
-    required_vars = ['API_ID', 'API_HASH', 'PHONE_NUMBER']
-    missing_vars = [var for var in required_vars if not os.getenv(var)]
-    
-    if missing_vars:
-        logger.error(f"❌ Missing required environment variables: {', '.join(missing_vars)}")
-        return False
-    if API_ID == 0:
-        logger.error("❌ API_ID must be a valid integer")
+    if not API_ID or not API_HASH:
+        logger.error("❌ Missing API_ID or API_HASH")
         return False
     return True
 
@@ -161,18 +163,30 @@ class BotStatistics:
 # MAIN BOT CLASS
 class MultiTargetTelegramPromoBot:
     def __init__(self):
-        from telethon.sessions import StringSession
-        session_string = os.getenv('SESSION_STRING', '')
-        
-        if session_string:
-            self.client = TelegramClient(StringSession(session_string), API_ID, API_HASH)
+        if SESSION_STRING:
+            self.client = TelegramClient(StringSession(SESSION_STRING), API_ID, API_HASH)
         else:
             self.client = TelegramClient(SESSION_NAME, API_ID, API_HASH)
         
         self.target_bot_entities: Dict[str, any] = {}
         self.is_running = True
         self.statistics = BotStatistics()
-        self.timeout_tasks: Dict[str, asyncio.Task] = {}  # Tracks individual bot 60s timeout tasks
+        self.timeout_tasks: Dict[str, asyncio.Task] = {} 
+        
+        # Script 2 variables
+        self.bot2_next_limit_reached = False
+
+    async def get_stickers(self):
+        """Fetches the most recent stickers from Saved Messages dynamically"""
+        stickers = []
+        try:
+            async for message in self.client.iter_messages('me', limit=30):
+                if message.sticker:
+                    stickers.append(message.document)
+                if len(stickers) >= 2: break
+        except Exception as e:
+            logger.error(f"Error fetching stickers: {e}")
+        return stickers
 
     async def start(self):
         """Start the bot"""
@@ -180,12 +194,12 @@ class MultiTargetTelegramPromoBot:
             if not validate_config():
                 raise ValueError("Invalid configuration")
 
-            await self.client.start(phone=PHONE_NUMBER)
+            await self.client.start(phone=PHONE_NUMBER if PHONE_NUMBER else None)
             logger.info("✅ Telegram client started successfully")
 
-            if not os.getenv('SESSION_STRING'):
-                session_string = self.client.session.save()
-                logger.info(f"📝 Session string (save this as SESSION_STRING env var): {session_string}")
+            if not SESSION_STRING:
+                new_session_string = self.client.session.save()
+                logger.info(f"📝 Session string (save this as SESSION_STRING env var): {new_session_string}")
 
             for bot_username in TARGET_BOTS.keys():
                 try:
@@ -204,7 +218,7 @@ class MultiTargetTelegramPromoBot:
             async def handle_new_message(event):
                 await self.process_message(event)
 
-            logger.info(f"🤖 Started monitoring {len(self.target_bot_entities)} bots for matches...")
+            logger.info(f"🤖 Started monitoring {len(self.target_bot_entities)} bots...")
             await self.start_health_server()
             await self.client.run_until_disconnected()
 
@@ -213,7 +227,7 @@ class MultiTargetTelegramPromoBot:
             raise
 
     async def process_message(self, event):
-        """Process incoming messages"""
+        """Process incoming messages integrating Script 1 and Script 2 logic"""
         try:
             message_text = event.message.text or ""
             sender_bot = None
@@ -227,9 +241,44 @@ class MultiTargetTelegramPromoBot:
 
             # Cancel timeout watcher because the target bot actively sent a message
             self.cancel_timeout_task(sender_bot)
-
             logger.debug(f"📨 Received from {sender_bot}: {message_text[:50]}...")
 
+            # ==========================================
+            # INTEGRATED SCRIPT 2 LOGIC (Stickers & Limits)
+            # ==========================================
+            if 'Partner found 😺' in message_text:
+                logger.info(f"{sender_bot}: Partner found. Sending sticker...")
+                await asyncio.sleep(1) 
+                
+                stickers = await self.get_stickers()
+                if len(stickers) >= 2:
+                    await self.client.send_file(event.chat_id, stickers[1])
+                elif len(stickers) >= 1:
+                    await self.client.send_file(event.chat_id, stickers[0])
+                
+                await asyncio.sleep(2) 
+                if self.bot2_next_limit_reached:
+                    await event.respond('/stop')
+                else:
+                    await event.respond('/next') 
+                return # Exit early so Script 1 logic doesn't trigger
+
+            elif any(phrase in message_text for phrase in ['You stopped the chat', 'Your partner has stopped the chat', 'Type /search to find a new partner']):
+                logger.info(f"{sender_bot}: Chat ended properly. Searching...")
+                await asyncio.sleep(1)
+                await event.respond('/search')
+                return
+
+            elif "daily /next limit" in message_text:
+                logger.info(f"{sender_bot}: Daily limit reached. Switching to /stop mode.")
+                self.bot2_next_limit_reached = True
+                await asyncio.sleep(1)
+                await event.respond('/stop')
+                return
+
+            # ==========================================
+            # INTEGRATED SCRIPT 1 LOGIC (Promo Text & Timeouts)
+            # ==========================================
             if is_match_message(message_text):
                 logger.info(f"🎯 Match detected from {sender_bot}! Sending promo message...")
                 self.statistics.record_match(sender_bot)
@@ -246,7 +295,6 @@ class MultiTargetTelegramPromoBot:
                 self.statistics.record_error(sender_bot)
 
     async def send_promotional_message(self, bot_username: str):
-        """Send a promotional message to specific bot"""
         try:
             if bot_username not in self.target_bot_entities:
                 return
@@ -259,18 +307,13 @@ class MultiTargetTelegramPromoBot:
             self.statistics.record_error(bot_username)
 
     async def send_next_command(self, bot_username: str):
-        """Send /next command to specific bot and start response guard"""
         try:
             if bot_username not in self.target_bot_entities:
                 return
-
-            # Ensure any previous tracking task is cleared before executing next action
             self.cancel_timeout_task(bot_username)
-
             await self.client.send_message(self.target_bot_entities[bot_username], "/next")
             logger.info(f"✅ Sent /next command to {bot_username}")
-
-            # Fire up a 60-second response monitor task
+            
             self.timeout_tasks[bot_username] = asyncio.create_task(
                 self.monitor_bot_timeout(bot_username)
             )
@@ -279,24 +322,20 @@ class MultiTargetTelegramPromoBot:
             self.statistics.record_error(bot_username)
 
     async def monitor_bot_timeout(self, bot_username: str):
-        """Asynchronously waits 60 seconds; triggers retry if target bot goes silent"""
         try:
             await asyncio.sleep(60)
             logger.warning(f"⏰ No response from {bot_username} for 60s after /next. Sending /next again...")
             await self.send_next_command(bot_username)
         except asyncio.CancelledError:
-            # Task was cleared cleanly because the bot responded in time
             pass
 
     def cancel_timeout_task(self, bot_username: str):
-        """Safely stops and discards a running timeout watcher"""
         task = self.timeout_tasks.get(bot_username)
         if task and not task.done():
             task.cancel()
         self.timeout_tasks[bot_username] = None
 
     async def start_health_server(self):
-        """Start a simple HTTP server for Render health checks with statistics"""
         from aiohttp import web
         
         async def health_check(request):
@@ -325,9 +364,9 @@ class MultiTargetTelegramPromoBot:
         await site.start()
         logger.info(f"🌐 Health server started on port {PORT}")
 
-# MAIN FUNCTION
+# MAIN ENTRY POINT
 async def main():
-    print("🚀 Starting Multi-Target Telegram Promotional Bot for Render...")
+    print("🚀 Starting Unified Telegram Promotional Bot for Render...")
     print("=" * 50)
     bot = MultiTargetTelegramPromoBot()
     try:
@@ -352,3 +391,4 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"❌ Error: {e}")
         time.sleep(60)
+
