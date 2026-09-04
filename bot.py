@@ -29,7 +29,7 @@ PORT = int(os.getenv('PORT', 10000))
 
 # Multiple target bots with individual delay settings - configurable via environment
 DEFAULT_TARGET_BOTS = {
-    '@AnonyMeetBot': {'min_delay': 5.0, 'max_delay': 12.0},
+    '': {'min_delay': 5.0, 'max_delay': 12.0},
     '@random_pacar_bot': {'min_delay': 9.0, 'max_delay': 13.0},
 }
 
