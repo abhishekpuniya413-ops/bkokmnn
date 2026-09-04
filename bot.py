@@ -48,7 +48,14 @@ BOT2_TARGET_BOTS = [bot.strip() for bot in os.getenv('TARGET_BOT', '').split(','
 # GLOBALS
 message_counters: Dict[str, int] = {}  # Counter per bot
 used_messages: Set[str] = set()
-MATCH_KEYWORDS = ["It's a match!", "Jenis kelamin", "Ketertarikan:", "Match found", "A partner has been found!"]
+MATCH_KEYWORDS = [
+    "It's a match!",
+    "Jenis kelamin",
+    "Ketertarikan:",
+    "Pasangan telah ditemukan!",
+    "Match found",
+    "A partner has been found!"
+]
 
 # Expanded fallback templates
 FALLBACK_TEMPLATES = [
