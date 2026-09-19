@@ -14,7 +14,7 @@ API_ID = int(os.getenv('API_ID', '0'))
 API_HASH = os.getenv('API_HASH', '')
 PHONE_NUMBER = os.getenv('PHONE_NUMBER', '')
 TARGET_BOT = os.getenv('TARGET_BOT', '@ChatOGeramBot') 
-PROMO_BOT = os.getenv('PROMO_BOT', '@GlobalChatBot')
+PROMO_BOT = os.getenv('PROMO_BOT', 'GlobalChatBot')
 SESSION_NAME = os.getenv('SESSION_NAME', 'onAnonBot')
 
 PORT = int(os.getenv('PORT', 10000))
