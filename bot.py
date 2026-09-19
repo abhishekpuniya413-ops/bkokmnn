@@ -120,7 +120,7 @@ class TelegramPromoBot:
                 else:
                     logger.warning("⚠️ No inline buttons found on the search menu!")
 
-            # STEP 3: Match Found (Fixed trigger words)
+            # STEP 3: Match Found
             elif "چت با" in message_text and "شروع شد" in message_text:
                 logger.info("🎯 MATCH DETECTED! Executing promo sequence...")
                 
@@ -129,7 +129,8 @@ class TelegramPromoBot:
                 await self.client.send_message(TARGET_BOT, promo)
                 logger.info("✅ Promo sent!")
                 
-                delay = random.uniform(5.0, 8.0)
+                # Slightly increased delay to avoid hitting the cooldown naturally
+                delay = random.uniform(7.0, 10.0)
                 logger.info(f"⏳ Waiting {delay:.1f}s before skipping...")
                 await asyncio.sleep(delay)
                 await self.client.send_message(TARGET_BOT, "🚫پایان چت")
@@ -140,6 +141,13 @@ class TelegramPromoBot:
                 logger.info("⚠️ Other user closed the chat first. Finding a new one...")
                 await asyncio.sleep(2)
                 await self.client.send_message(TARGET_BOT, "به یه ناشناس وصلم کن!")
+
+            # STEP 3.6: Cooldown / Anti-spam bypass (NEW)
+            elif "بستن چت" in message_text and "صبر کنید" in message_text:
+                logger.warning("⏳ Hit the chat closing cooldown! Waiting 3 seconds and retrying...")
+                await asyncio.sleep(3.0)
+                await self.client.send_message(TARGET_BOT, "پایان چت 🚫")
+                logger.info("✅ Retried 'End Chat' command.")
 
             # STEP 4: End Chat Confirmation 
             elif "مطمئنی" in message_text:
