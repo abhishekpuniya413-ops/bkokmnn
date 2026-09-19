@@ -72,6 +72,7 @@ class TelegramPromoBot:
             
         self.state = "idle" # States: idle, searching, chatting
         self.last_activity_time = time.time()
+        self.last_search_time = 0
 
     async def watchdog(self):
         """Monitors the bot state and unsticks it if it hangs."""
@@ -82,9 +83,7 @@ class TelegramPromoBot:
             # If stuck searching for more than 20 seconds
             if self.state == "searching" and time_since_activity > 20.0:
                 logger.warning("⚠️ Bot seems stuck on 'Searching...'. Forcing a new request to unstick it!")
-                self.state = "idle"
-                await self.client.send_message(TARGET_BOT, "به یه ناشناس وصلم کن!")
-                self.last_activity_time = time.time()
+                await self.request_stranger()
                 
             # If stuck inside a chat for more than 60 seconds (something failed)
             elif self.state == "chatting" and time_since_activity > 60.0:
@@ -94,11 +93,14 @@ class TelegramPromoBot:
 
     async def request_stranger(self):
         """Helper to request a new chat and update state."""
-        self.state = "idle"
-        await asyncio.sleep(1.5)
-        await self.client.send_message(TARGET_BOT, "به یه ناشناس وصلم کن!")
-        self.last_activity_time = time.time()
-        logger.info("✅ Requested new stranger connection.")
+        current_time = time.time()
+        if current_time - self.last_search_time > 4.0:
+            self.state = "idle"
+            await asyncio.sleep(1.5)
+            await self.client.send_message(TARGET_BOT, "به یه ناشناس وصلم کن!")
+            self.last_search_time = current_time
+            self.last_activity_time = current_time
+            logger.info("✅ Requested new stranger connection.")
 
     async def start(self):
         if not os.getenv('API_ID'):
@@ -136,9 +138,9 @@ class TelegramPromoBot:
             # Reset the watchdog timer on every received message
             self.last_activity_time = time.time()
             
-            # STEP 0: Ignore History Deletion prompts
-            if "delHistory" in message_text:
-                logger.info("🧹 Bot offered to delete history. Ignoring safely.")
+            # STEP 0: Ignore History Deletion and system prompts
+            if any(word in message_text for word in ["delHistory", "پروفایل", "توجه:"]):
+                logger.info("🧹 System message detected. Ignoring safely.")
                 return
                 
             # Update state to searching
@@ -170,6 +172,10 @@ class TelegramPromoBot:
                 logger.info("🎯 MATCH DETECTED! Executing promo sequence...")
                 
                 await asyncio.sleep(random.uniform(1.5, 3.0))
+                
+                if self.state != "chatting":
+                    return
+
                 promo = generate_random_message()
                 await self.client.send_message(TARGET_BOT, promo)
                 logger.info("✅ Promo sent!")
@@ -177,11 +183,14 @@ class TelegramPromoBot:
                 delay = random.uniform(7.0, 10.0)
                 logger.info(f"⏳ Waiting {delay:.1f}s before skipping...")
                 await asyncio.sleep(delay)
-                await self.client.send_message(TARGET_BOT, "🚫پایان چت ")
-                logger.info("✅ Sent 'End Chat' command.")
+                
+                if self.state == "chatting":
+                    await self.client.send_message(TARGET_BOT, "🚫پایان چت")
+                    logger.info("✅ Sent 'End Chat' command.")
 
             # STEP 3.5: The OTHER person ends the chat first
             elif "بسته شد" in message_text and "ایشون" in message_text:
+                self.state = "idle"
                 logger.info("⚠️ Other user closed the chat first. Finding a new one...")
                 await self.request_stranger()
 
@@ -192,18 +201,35 @@ class TelegramPromoBot:
                 await self.client.send_message(TARGET_BOT, "🚫پایان چت")
                 logger.info("✅ Retried 'End Chat' command.")
 
-            # STEP 4: End Chat Confirmation 
+            # STEP 4: End Chat Confirmation (Fixed spelling check for 'اره' & 'آره')
             elif "مطمئنی" in message_text:
-                logger.info("📍 End chat confirmation detected. Clicking 'Yes'...")
-                await asyncio.sleep(1.0)
-                if event.message.buttons:
-                    for row in event.message.buttons:
+                logger.info("📍 End chat confirmation detected. Fetching buttons...")
+                await asyncio.sleep(0.5)
+                
+                # Re-fetch message from server to ensure buttons are loaded
+                msg = await self.client.get_messages(TARGET_BOT, ids=event.message.id)
+                
+                if msg and msg.buttons:
+                    clicked = False
+                    for row in msg.buttons:
                         for button in row:
-                            if 'آره' in button.text:
+                            # Supports both 'اره' and 'آره'
+                            if any(keyword in button.text for keyword in ['آره', 'اره', 'بله', 'ببند', '❌']):
                                 await button.click()
-                                logger.info("✅ Clicked Yes to close chat!")
+                                logger.info(f"✅ Clicked Yes button: [{button.text}]")
+                                clicked = True
                                 await self.request_stranger()
                                 return
+                    
+                    if not clicked:
+                        logger.warning("⚠️ Keyword not found! Clicking the first button by default.")
+                        if msg.buttons[0][0]:
+                            await msg.buttons[0][0].click()
+                            await self.request_stranger()
+                else:
+                    logger.warning("⚠️ No inline buttons found! Sending text command fallback...")
+                    await self.client.send_message(TARGET_BOT, "اره چت رو ببند")
+                    await self.request_stranger()
 
         except Exception as e:
             logger.error(f"❌ Error during message processing: {e}")
@@ -231,4 +257,4 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
-        
+    
