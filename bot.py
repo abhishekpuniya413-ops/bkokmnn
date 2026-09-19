@@ -70,8 +70,9 @@ class TelegramPromoBot:
         else:
             self.client = TelegramClient(SESSION_NAME, API_ID, API_HASH)
             
-        self.state = "idle" # States: idle, searching, chatting
+        self.state = "idle" 
         self.last_activity_time = time.time()
+        self.last_search_time = 0
 
     async def watchdog(self):
         """Monitors the bot state and unsticks it if it hangs."""
@@ -79,26 +80,25 @@ class TelegramPromoBot:
             await asyncio.sleep(5)
             time_since_activity = time.time() - self.last_activity_time
             
-            # If stuck searching for more than 20 seconds
             if self.state == "searching" and time_since_activity > 20.0:
                 logger.warning("⚠️ Bot seems stuck on 'Searching...'. Forcing a new request to unstick it!")
-                self.state = "idle"
-                await self.client.send_message(TARGET_BOT, "به یه ناشناس وصلم کن!")
-                self.last_activity_time = time.time()
+                await self.request_stranger()
                 
-            # If stuck inside a chat for more than 60 seconds (something failed)
             elif self.state == "chatting" and time_since_activity > 60.0:
                 logger.warning("⚠️ Bot seems stuck in a chat. Forcing exit...")
-                await self.client.send_message(TARGET_BOT, "🚫پایان چت")
+                await self.client.send_message(TARGET_BOT, "پایان چت 🚫")
                 self.last_activity_time = time.time()
 
     async def request_stranger(self):
-        """Helper to request a new chat and update state."""
-        self.state = "idle"
-        await asyncio.sleep(1.5)
-        await self.client.send_message(TARGET_BOT, "به یه ناشناس وصلم کن!")
-        self.last_activity_time = time.time()
-        logger.info("✅ Requested new stranger connection.")
+        """Helper to safely request a new chat without double-sending."""
+        current_time = time.time()
+        if current_time - self.last_search_time > 4.0: 
+            self.state = "idle"
+            await asyncio.sleep(1.5)
+            await self.client.send_message(TARGET_BOT, "به یه ناشناس وصلم کن!")
+            self.last_search_time = current_time
+            self.last_activity_time = current_time
+            logger.info("✅ Requested new stranger connection.")
 
     async def start(self):
         if not os.getenv('API_ID'):
@@ -108,7 +108,6 @@ class TelegramPromoBot:
         await self.client.start(phone=PHONE_NUMBER)
         logger.info("✅ Telegram client started successfully")
 
-        # Start the anti-stuck watchdog in the background
         self.client.loop.create_task(self.watchdog())
 
         @self.client.on(events.NewMessage(chats=TARGET_BOT, incoming=True))
@@ -116,9 +115,8 @@ class TelegramPromoBot:
             await self.process_message(event)
 
         logger.info(f"🤖 Monitoring {TARGET_BOT} for messages...")
-
-        logger.info("🚀 Sending initial /start command to wake up the bot...")
         await asyncio.sleep(2) 
+        
         try:
             await self.client.send_message(TARGET_BOT, "/start")
         except Exception as e:
@@ -133,16 +131,14 @@ class TelegramPromoBot:
             clean_text = message_text.replace('\n', ' ')
             logger.info(f"👀 Bot Saw: {clean_text[:80]}...")
             
-            # Reset the watchdog timer on every received message
             self.last_activity_time = time.time()
             
-            # STEP 0: Ignore History Deletion prompts
-            if "delHistory" in message_text:
-                logger.info("🧹 Bot offered to delete history. Ignoring safely.")
+            # STEP 0: Ignore all system popups and alerts safely
+            if any(word in message_text for word in ["delHistory", "پروفایل", "توجه:"]):
+                logger.info("🧹 System message detected. Ignoring safely.")
                 return
                 
-            # Update state to searching
-            elif "درحال جستجوی" in message_text:
+            if "درحال جستجوی" in message_text:
                 self.state = "searching"
                 logger.info("🔎 Bot is searching... Watchdog timer started.")
                 return
@@ -170,6 +166,10 @@ class TelegramPromoBot:
                 logger.info("🎯 MATCH DETECTED! Executing promo sequence...")
                 
                 await asyncio.sleep(random.uniform(1.5, 3.0))
+                
+                if self.state != "chatting":
+                    return # Exit early if the other user left
+
                 promo = generate_random_message()
                 await self.client.send_message(TARGET_BOT, promo)
                 logger.info("✅ Promo sent!")
@@ -177,11 +177,14 @@ class TelegramPromoBot:
                 delay = random.uniform(7.0, 10.0)
                 logger.info(f"⏳ Waiting {delay:.1f}s before skipping...")
                 await asyncio.sleep(delay)
-                await self.client.send_message(TARGET_BOT, "🚫پایان چت ")
-                logger.info("✅ Sent 'End Chat' command.")
+                
+                if self.state == "chatting":
+                    await self.client.send_message(TARGET_BOT, "🚫پایان چت")
+                    logger.info("✅ Sent 'End Chat' command.")
 
             # STEP 3.5: The OTHER person ends the chat first
             elif "بسته شد" in message_text and "ایشون" in message_text:
+                self.state = "idle"
                 logger.info("⚠️ Other user closed the chat first. Finding a new one...")
                 await self.request_stranger()
 
@@ -190,20 +193,38 @@ class TelegramPromoBot:
                 logger.warning("⏳ Hit the chat closing cooldown! Waiting 3 seconds and retrying...")
                 await asyncio.sleep(3.0)
                 await self.client.send_message(TARGET_BOT, "🚫پایان چت")
-                logger.info("✅ Retried 'End Chat' command.")
 
-            # STEP 4: End Chat Confirmation 
+            # STEP 4: End Chat Confirmation (Aggressive & Bulletproof Clicking)
             elif "مطمئنی" in message_text:
-                logger.info("📍 End chat confirmation detected. Clicking 'Yes'...")
-                await asyncio.sleep(1.0)
-                if event.message.buttons:
-                    for row in event.message.buttons:
+                logger.info("📍 End chat confirmation detected. Fetching buttons...")
+                
+                # Wait 0.5s to ensure Telegram attached the buttons, then re-fetch the message!
+                await asyncio.sleep(0.5)
+                msg = await self.client.get_messages(TARGET_BOT, ids=event.message.id)
+                
+                if msg and msg.buttons:
+                    clicked = False
+                    for row in msg.buttons:
                         for button in row:
-                            if 'آره' in button.text:
+                            if any(keyword in button.text for keyword in ['اره', 'آره', 'بله', 'ببند', '❌']):
                                 await button.click()
-                                logger.info("✅ Clicked Yes to close chat!")
+                                logger.info(f"✅ Clicked Yes button: [{button.text}]")
+                                clicked = True
+                                self.state = "idle" 
                                 await self.request_stranger()
                                 return
+                    
+                    if not clicked:
+                        logger.warning("⚠️ Could not find 'Yes' keyword! Forcing click on the first button.")
+                        if msg.buttons[0][0]:
+                            await msg.buttons[0][0].click()
+                            self.state = "idle"
+                            await self.request_stranger()
+                else:
+                    logger.warning("⚠️ Still no inline buttons found! Sending text command fallback...")
+                    await self.client.send_message(TARGET_BOT, "اره چت رو ببند")
+                    self.state = "idle"
+                    await self.request_stranger()
 
         except Exception as e:
             logger.error(f"❌ Error during message processing: {e}")
@@ -231,4 +252,4 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
-        
+    
