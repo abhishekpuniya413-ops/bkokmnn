@@ -177,7 +177,7 @@ class TelegramPromoBot:
                 delay = random.uniform(7.0, 10.0)
                 logger.info(f"⏳ Waiting {delay:.1f}s before skipping...")
                 await asyncio.sleep(delay)
-                await self.client.send_message(TARGET_BOT, "پایان چت ")
+                await self.client.send_message(TARGET_BOT, "🚫پایان چت ")
                 logger.info("✅ Sent 'End Chat' command.")
 
             # STEP 3.5: The OTHER person ends the chat first
