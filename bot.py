@@ -14,7 +14,7 @@ API_ID = int(os.getenv('API_ID', '0'))
 API_HASH = os.getenv('API_HASH', '')
 PHONE_NUMBER = os.getenv('PHONE_NUMBER', '')
 TARGET_BOT = os.getenv('TARGET_BOT', '@ChatOGeramBot') 
-PROMO_BOT = os.getenv('PROMO_BOT', 'GlobalChatBot')
+PROMO_BOT = os.getenv('PROMO_BOT', '@GlobalChatBot')
 SESSION_NAME = os.getenv('SESSION_NAME', 'onAnonBot')
 
 PORT = int(os.getenv('PORT', 10000))
@@ -69,8 +69,6 @@ class TelegramPromoBot:
             self.client = TelegramClient(StringSession(session_string), API_ID, API_HASH)
         else:
             self.client = TelegramClient(SESSION_NAME, API_ID, API_HASH)
-        
-        self.target_bot_entity = None
 
     async def start(self):
         if not os.getenv('API_ID'):
@@ -80,86 +78,88 @@ class TelegramPromoBot:
         await self.client.start(phone=PHONE_NUMBER)
         logger.info("✅ Telegram client started successfully")
 
-        try:
-            self.target_bot_entity = await self.client.get_entity(TARGET_BOT)
-            logger.info(f"✅ Successfully locked onto target bot: {TARGET_BOT}")
-        except Exception as e:
-            logger.error(f"❌ Could not find {TARGET_BOT}. Error: {e}")
-            return
-
-        @self.client.on(events.NewMessage(chats=self.target_bot_entity, incoming=True))
+        @self.client.on(events.NewMessage(chats=TARGET_BOT, incoming=True))
         async def handle_new_message(event):
             await self.process_message(event)
 
-        logger.info("🤖 Monitoring for messages...")
+        logger.info(f"🤖 Monitoring {TARGET_BOT} for messages...")
 
-        # AUTO-START: Kick off the flow by sending /start
         logger.info("🚀 Sending initial /start command to wake up the bot...")
         await asyncio.sleep(2) 
-        await self.client.send_message(self.target_bot_entity, "/start")
+        try:
+            await self.client.send_message(TARGET_BOT, "/start")
+        except Exception as e:
+            logger.error(f"❌ Could not send /start: {e}")
 
         await self.start_health_server()
         await self.client.run_until_disconnected()
 
     async def process_message(self, event):
-        message_text = event.message.text or ""
-        clean_text = message_text.replace('\n', ' ')
-        logger.info(f"👀 Bot Saw: {clean_text[:80]}...")
+        try:
+            message_text = event.message.text or ""
+            clean_text = message_text.replace('\n', ' ')
+            logger.info(f"👀 Bot Saw: {clean_text[:80]}...")
 
-        # ---------------------------------------------------------
-        # THE EXACT FLOW RECREATED FROM YOUR IMAGES
-        # ---------------------------------------------------------
+            # STEP 1: Main Menu 
+            if "منوی" in message_text or "استارت" in message_text:
+                logger.info("📍 Main Menu detected. Requesting stranger connection...")
+                await asyncio.sleep(1.5)
+                await self.client.send_message(TARGET_BOT, "به یه ناشناس وصلم کن!")
 
-        # STEP 1: Main Menu -> Send text to request stranger
-        if "منوی اصلی" in message_text or "ربات استارت شد" in message_text:
-            logger.info("📍 Main Menu detected. Requesting stranger connection...")
-            await asyncio.sleep(1.5)
-            await self.client.send_message(self.target_bot_entity, "به یه ناشناس وصلم کن!")
+            # STEP 2: Search Type Menu 
+            elif "پیدا کنم" in message_text:
+                logger.info("📍 Search menu detected. Clicking Random Search...")
+                await asyncio.sleep(1.5)
+                if event.message.buttons:
+                    for row in event.message.buttons:
+                        for button in row:
+                            if 'شانسی' in button.text: 
+                                await button.click()
+                                logger.info("✅ Clicked Random Search button!")
+                                return
+                else:
+                    logger.warning("⚠️ No inline buttons found on the search menu!")
 
-        # STEP 2: Search Type Menu -> Click Inline "Random Search" Button
-        elif "کیو پیدا کنم برات؟" in message_text:
-            logger.info("📍 Search menu detected. Clicking Random Search...")
-            await asyncio.sleep(1.5)
-            if event.message.buttons:
-                for row in event.message.buttons:
-                    for button in row:
-                        if 'شانسی' in button.text:  # Looks for 'جستجوی شانسی 🎲'
-                            await button.click()
-                            logger.info("✅ Clicked Random Search button!")
-                            return
+            # STEP 3: Match Found (Fixed trigger words)
+            elif "چت با" in message_text and "شروع شد" in message_text:
+                logger.info("🎯 MATCH DETECTED! Executing promo sequence...")
+                
+                await asyncio.sleep(random.uniform(1.5, 3.0))
+                promo = generate_random_message()
+                await self.client.send_message(TARGET_BOT, promo)
+                logger.info("✅ Promo sent!")
+                
+                delay = random.uniform(5.0, 8.0)
+                logger.info(f"⏳ Waiting {delay:.1f}s before skipping...")
+                await asyncio.sleep(delay)
+                await self.client.send_message(TARGET_BOT, "پایان چت 🚫")
+                logger.info("✅ Sent 'End Chat' command.")
 
-        # STEP 3: Match Found -> Wait -> Promo -> End Chat
-        elif "چت با (آشنایت)" in message_text:
-            logger.info("🎯 MATCH DETECTED! Executing promo sequence...")
-            
-            # Wait 2 seconds before pasting promo
-            await asyncio.sleep(random.uniform(1.5, 3.0))
-            promo = generate_random_message()
-            await self.client.send_message(self.target_bot_entity, promo)
-            logger.info("✅ Promo sent!")
-            
-            # Wait 5 to 8 seconds, then send the exact "End Chat" text command
-            delay = random.uniform(5.0, 8.0)
-            logger.info(f"⏳ Waiting {delay:.1f}s before skipping...")
-            await asyncio.sleep(delay)
-            await self.client.send_message(self.target_bot_entity, "پایان چت 🚫")
-            logger.info("✅ Sent 'End Chat' command.")
+            # STEP 3.5: The OTHER person ends the chat first
+            elif "بسته شد" in message_text and "ایشون" in message_text:
+                logger.info("⚠️ Other user closed the chat first. Finding a new one...")
+                await asyncio.sleep(2)
+                await self.client.send_message(TARGET_BOT, "به یه ناشناس وصلم کن!")
 
-        # STEP 4: End Chat Confirmation -> Click Inline "Yes" Button
-        elif "مطمئنی که میخوای گفتگو رو" in message_text:
-            logger.info("📍 End chat confirmation detected. Clicking 'Yes'...")
-            await asyncio.sleep(1.0)
-            if event.message.buttons:
-                for row in event.message.buttons:
-                    for button in row:
-                        if 'آره' in button.text:  # Looks for 'آره چت رو ببند ❌'
-                            await button.click()
-                            logger.info("✅ Clicked Yes to close chat!")
-                            
-                            # Loop restart: Request new stranger after closing
-                            await asyncio.sleep(2)
-                            await self.client.send_message(self.target_bot_entity, "به یه ناشناس وصلم کن!")
-                            return
+            # STEP 4: End Chat Confirmation 
+            elif "مطمئنی" in message_text:
+                logger.info("📍 End chat confirmation detected. Clicking 'Yes'...")
+                await asyncio.sleep(1.0)
+                if event.message.buttons:
+                    for row in event.message.buttons:
+                        for button in row:
+                            if 'آره' in button.text:
+                                await button.click()
+                                logger.info("✅ Clicked Yes to close chat!")
+                                
+                                await asyncio.sleep(2)
+                                await self.client.send_message(TARGET_BOT, "به یه ناشناس وصلم کن!")
+                                return
+                else:
+                    logger.warning("⚠️ No inline buttons found on the confirmation menu!")
+
+        except Exception as e:
+            logger.error(f"❌ Error during message processing: {e}")
 
     async def start_health_server(self):
         from aiohttp import web
@@ -184,4 +184,4 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
-            
+    
