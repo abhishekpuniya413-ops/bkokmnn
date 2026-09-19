@@ -89,7 +89,7 @@ class TelegramPromoBot:
             # If stuck inside a chat for more than 60 seconds (something failed)
             elif self.state == "chatting" and time_since_activity > 60.0:
                 logger.warning("⚠️ Bot seems stuck in a chat. Forcing exit...")
-                await self.client.send_message(TARGET_BOT, "پایان چت 🚫")
+                await self.client.send_message(TARGET_BOT, "🚫پایان چت")
                 self.last_activity_time = time.time()
 
     async def request_stranger(self):
