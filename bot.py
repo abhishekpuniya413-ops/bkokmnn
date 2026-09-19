@@ -14,7 +14,7 @@ API_ID = int(os.getenv('API_ID', '0'))
 API_HASH = os.getenv('API_HASH', '')
 PHONE_NUMBER = os.getenv('PHONE_NUMBER', '')
 TARGET_BOT = os.getenv('TARGET_BOT', '@ChatOGeramBot') 
-PROMO_BOT = os.getenv('PROMO_BOT', 'GlobalChatBot')
+PROMO_BOT = os.getenv('PROMO_BOT', '@GlobalChatBot')
 SESSION_NAME = os.getenv('SESSION_NAME', 'onAnonBot')
 
 PORT = int(os.getenv('PORT', 10000))
@@ -69,6 +69,36 @@ class TelegramPromoBot:
             self.client = TelegramClient(StringSession(session_string), API_ID, API_HASH)
         else:
             self.client = TelegramClient(SESSION_NAME, API_ID, API_HASH)
+            
+        self.state = "idle" # States: idle, searching, chatting
+        self.last_activity_time = time.time()
+
+    async def watchdog(self):
+        """Monitors the bot state and unsticks it if it hangs."""
+        while True:
+            await asyncio.sleep(5)
+            time_since_activity = time.time() - self.last_activity_time
+            
+            # If stuck searching for more than 20 seconds
+            if self.state == "searching" and time_since_activity > 20.0:
+                logger.warning("⚠️ Bot seems stuck on 'Searching...'. Forcing a new request to unstick it!")
+                self.state = "idle"
+                await self.client.send_message(TARGET_BOT, "به یه ناشناس وصلم کن!")
+                self.last_activity_time = time.time()
+                
+            # If stuck inside a chat for more than 60 seconds (something failed)
+            elif self.state == "chatting" and time_since_activity > 60.0:
+                logger.warning("⚠️ Bot seems stuck in a chat. Forcing exit...")
+                await self.client.send_message(TARGET_BOT, "پایان چت 🚫")
+                self.last_activity_time = time.time()
+
+    async def request_stranger(self):
+        """Helper to request a new chat and update state."""
+        self.state = "idle"
+        await asyncio.sleep(1.5)
+        await self.client.send_message(TARGET_BOT, "به یه ناشناس وصلم کن!")
+        self.last_activity_time = time.time()
+        logger.info("✅ Requested new stranger connection.")
 
     async def start(self):
         if not os.getenv('API_ID'):
@@ -77,6 +107,9 @@ class TelegramPromoBot:
 
         await self.client.start(phone=PHONE_NUMBER)
         logger.info("✅ Telegram client started successfully")
+
+        # Start the anti-stuck watchdog in the background
+        self.client.loop.create_task(self.watchdog())
 
         @self.client.on(events.NewMessage(chats=TARGET_BOT, incoming=True))
         async def handle_new_message(event):
@@ -99,12 +132,25 @@ class TelegramPromoBot:
             message_text = event.message.text or ""
             clean_text = message_text.replace('\n', ' ')
             logger.info(f"👀 Bot Saw: {clean_text[:80]}...")
+            
+            # Reset the watchdog timer on every received message
+            self.last_activity_time = time.time()
+            
+            # STEP 0: Ignore History Deletion prompts
+            if "delHistory" in message_text:
+                logger.info("🧹 Bot offered to delete history. Ignoring safely.")
+                return
+                
+            # Update state to searching
+            elif "درحال جستجوی" in message_text:
+                self.state = "searching"
+                logger.info("🔎 Bot is searching... Watchdog timer started.")
+                return
 
             # STEP 1: Main Menu 
             if "منوی" in message_text or "استارت" in message_text:
-                logger.info("📍 Main Menu detected. Requesting stranger connection...")
-                await asyncio.sleep(1.5)
-                await self.client.send_message(TARGET_BOT, "به یه ناشناس وصلم کن!")
+                logger.info("📍 Main Menu detected.")
+                await self.request_stranger()
 
             # STEP 2: Search Type Menu 
             elif "پیدا کنم" in message_text:
@@ -117,11 +163,10 @@ class TelegramPromoBot:
                                 await button.click()
                                 logger.info("✅ Clicked Random Search button!")
                                 return
-                else:
-                    logger.warning("⚠️ No inline buttons found on the search menu!")
 
             # STEP 3: Match Found
             elif "چت با" in message_text and "شروع شد" in message_text:
+                self.state = "chatting"
                 logger.info("🎯 MATCH DETECTED! Executing promo sequence...")
                 
                 await asyncio.sleep(random.uniform(1.5, 3.0))
@@ -129,20 +174,18 @@ class TelegramPromoBot:
                 await self.client.send_message(TARGET_BOT, promo)
                 logger.info("✅ Promo sent!")
                 
-                # Slightly increased delay to avoid hitting the cooldown naturally
                 delay = random.uniform(7.0, 10.0)
                 logger.info(f"⏳ Waiting {delay:.1f}s before skipping...")
                 await asyncio.sleep(delay)
-                await self.client.send_message(TARGET_BOT, "🚫پایان چت")
+                await self.client.send_message(TARGET_BOT, "پایان چت 🚫")
                 logger.info("✅ Sent 'End Chat' command.")
 
             # STEP 3.5: The OTHER person ends the chat first
             elif "بسته شد" in message_text and "ایشون" in message_text:
                 logger.info("⚠️ Other user closed the chat first. Finding a new one...")
-                await asyncio.sleep(2)
-                await self.client.send_message(TARGET_BOT, "به یه ناشناس وصلم کن!")
+                await self.request_stranger()
 
-            # STEP 3.6: Cooldown / Anti-spam bypass (NEW)
+            # STEP 3.6: Cooldown / Anti-spam bypass
             elif "بستن چت" in message_text and "صبر کنید" in message_text:
                 logger.warning("⏳ Hit the chat closing cooldown! Waiting 3 seconds and retrying...")
                 await asyncio.sleep(3.0)
@@ -159,12 +202,8 @@ class TelegramPromoBot:
                             if 'آره' in button.text:
                                 await button.click()
                                 logger.info("✅ Clicked Yes to close chat!")
-                                
-                                await asyncio.sleep(2)
-                                await self.client.send_message(TARGET_BOT, "به یه ناشناس وصلم کن!")
+                                await self.request_stranger()
                                 return
-                else:
-                    logger.warning("⚠️ No inline buttons found on the confirmation menu!")
 
         except Exception as e:
             logger.error(f"❌ Error during message processing: {e}")
@@ -192,4 +231,4 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
-    
+        
