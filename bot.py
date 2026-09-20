@@ -70,32 +70,41 @@ class TelegramPromoBot:
         else:
             self.client = TelegramClient(SESSION_NAME, API_ID, API_HASH)
             
-        self.state = "idle" # States: idle, searching, chatting
+        self.state = "idle" # States: idle, waiting_match, searching, chatting
         self.last_activity_time = time.time()
         self.last_search_time = 0
 
     async def watchdog(self):
-        """Monitors the bot state and unsticks it if it hangs."""
+        """Monitors the bot state and re-sends commands if the target bot goes silent or hangs."""
         while True:
             await asyncio.sleep(5)
             time_since_activity = time.time() - self.last_activity_time
             
-            # If stuck searching for more than 20 seconds
-            if self.state == "searching" and time_since_activity > 20.0:
-                logger.warning("⚠️ Bot seems stuck on 'Searching...'. Forcing a new request to unstick it!")
-                await self.request_stranger()
+            # If we requested a stranger/started and the bot didn't respond for 15 seconds, re-send!
+            if self.state in ["idle", "waiting_match"] and time_since_activity > 15.0:
+                logger.warning("⚠️ Target bot is not responding! Resending search request...")
+                await self.client.send_message(TARGET_BOT, "به یه ناشناس وصلم کن!")
+                self.last_activity_time = time.time()
+                self.state = "waiting_match"
                 
-            # If stuck inside a chat for more than 60 seconds (something failed)
+            # If stuck searching for more than 20 seconds
+            elif self.state == "searching" and time_since_activity > 20.0:
+                logger.warning("⚠️ Bot seems stuck on 'Searching...'. Forcing a new request to unstick it!")
+                await self.client.send_message(TARGET_BOT, "به یه ناشناس وصلم کن!")
+                self.state = "waiting_match"
+                self.last_activity_time = time.time()
+                
+            # If stuck inside a chat for more than 60 seconds
             elif self.state == "chatting" and time_since_activity > 60.0:
                 logger.warning("⚠️ Bot seems stuck in a chat. Forcing exit...")
                 await self.client.send_message(TARGET_BOT, "🚫پایان چت")
                 self.last_activity_time = time.time()
 
     async def request_stranger(self):
-        """Helper to request a new chat and update state."""
+        """Helper to request a new chat and update state safely."""
         current_time = time.time()
         if current_time - self.last_search_time > 4.0:
-            self.state = "idle"
+            self.state = "waiting_match"
             await asyncio.sleep(1.5)
             await self.client.send_message(TARGET_BOT, "به یه ناشناس وصلم کن!")
             self.last_search_time = current_time
@@ -122,6 +131,7 @@ class TelegramPromoBot:
         logger.info("🚀 Sending initial /start command to wake up the bot...")
         await asyncio.sleep(2) 
         try:
+            self.state = "idle"
             await self.client.send_message(TARGET_BOT, "/start")
         except Exception as e:
             logger.error(f"❌ Could not send /start: {e}")
@@ -135,7 +145,7 @@ class TelegramPromoBot:
             clean_text = message_text.replace('\n', ' ')
             logger.info(f"👀 Bot Saw: {clean_text[:80]}...")
             
-            # Reset the watchdog timer on every received message
+            # Reset the watchdog timer on every received message from the bot
             self.last_activity_time = time.time()
             
             # STEP 0: Ignore History Deletion and system prompts
@@ -143,15 +153,15 @@ class TelegramPromoBot:
                 logger.info("🧹 System message detected. Ignoring safely.")
                 return
                 
-            # Update state to searching
+            # Update state when search starts
             elif "درحال جستجوی" in message_text:
                 self.state = "searching"
-                logger.info("🔎 Bot is searching... Watchdog timer started.")
+                logger.info("🔎 Bot is searching... Watchdog timer active.")
                 return
 
-            # STEP 1: Main Menu 
-            if "منوی" in message_text or "استارت" in message_text:
-                logger.info("📍 Main Menu detected.")
+            # STEP 1: Main Menu / Start menu detected
+            if any(word in message_text for word in ["منوی", "استارت", "خوش اومدی"]):
+                logger.info("📍 Main Menu detected. Requesting stranger...")
                 await self.request_stranger()
 
             # STEP 2: Search Type Menu 
@@ -213,7 +223,6 @@ class TelegramPromoBot:
                     clicked = False
                     for row in msg.buttons:
                         for button in row:
-                            # Supports both 'اره' and 'آره'
                             if any(keyword in button.text for keyword in ['آره', 'اره', 'بله', 'ببند', '❌']):
                                 await button.click()
                                 logger.info(f"✅ Clicked Yes button: [{button.text}]")
@@ -257,4 +266,4 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
-    
+                                                     
