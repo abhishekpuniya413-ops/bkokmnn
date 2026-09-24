@@ -75,6 +75,7 @@ class TelegramPromoBot:
         self.state = "idle" # States: idle, searching, chatting
         self.last_activity_time = time.time()
         self.last_search_time = 0
+        self.chat_session_id = 0 # Prevents old async timers from firing in new chats
 
     async def watchdog(self):
         """Monitors the bot state and unsticks it if it hangs."""
@@ -82,12 +83,10 @@ class TelegramPromoBot:
             await asyncio.sleep(5)
             time_since_activity = time.time() - self.last_activity_time
             
-            # If stuck searching for more than 25 seconds
             if self.state in ["idle", "searching"] and time_since_activity > 25.0:
                 logger.warning("⚠️ Bot seems stuck or inactive. Resending /search...")
                 await self.request_search()
                 
-            # If stuck inside a chat for more than 60 seconds
             elif self.state == "chatting" and time_since_activity > 60.0:
                 logger.warning("⚠️ Bot seems stuck in a chat. Forcing /next...")
                 await self.client.send_message(TARGET_BOT, "/next")
@@ -137,13 +136,28 @@ class TelegramPromoBot:
             
             self.last_activity_time = time.time()
             
-            # STEP 0: Handle Anti-Bot Verification (CAPTCHA)
+            # STEP 0: Handle Chatify's Anti-Spam / Skip Cooldown
+            if "Please wait" in message_text and "before ending the chat" in message_text:
+                match = re.search(r'wait\s+(\d+)\s+more\s+seconds', message_text)
+                if match:
+                    wait_time = int(match.group(1))
+                    logger.warning(f"⏳ Hit skip cooldown! Waiting {wait_time}s before retrying /next...")
+                    current_session = self.chat_session_id
+                    
+                    await asyncio.sleep(wait_time + 1.0)
+                    
+                    # Only retry if we haven't already moved to a new chat
+                    if self.state == "chatting" and self.chat_session_id == current_session:
+                        await self.client.send_message(TARGET_BOT, "/next")
+                        logger.info("✅ Retried /next command.")
+                return
+
+            # STEP 1: Handle Anti-Bot Verification (CAPTCHA)
             if "Anti-Bot Verification" in message_text or "=" in message_text:
                 logger.info("🤖 CAPTCHA detected! Solving math puzzle...")
                 await asyncio.sleep(0.5)
                 msg = await self.client.get_messages(TARGET_BOT, ids=event.message.id)
                 
-                # Extract math expression like "1 x 5" or "3 + 2"
                 match = re.search(r'(\d+)\s*([\+\-\*x×/])\s*(\d+)', message_text)
                 if match:
                     n1, op, n2 = match.groups()
@@ -164,41 +178,46 @@ class TelegramPromoBot:
                     except Exception as ex:
                         logger.error(f"❌ Error solving captcha math: {ex}")
 
-            # STEP 1: Searching state
-            if "Searching" in message_text or "searching" in message_text or "stop to cancel" in message_text:
+            # STEP 2: Searching state or successful verification
+            if any(word in message_text for word in ["Searching", "searching", "stop to cancel", "Verification Successful"]):
                 self.state = "searching"
                 logger.info("🔎 Bot is searching for partner...")
                 return
 
-            # STEP 2: Partner Found
+            # STEP 3: Partner Found
             elif "Partner found" in message_text or "Start chatting" in message_text:
                 self.state = "chatting"
-                logger.info("🎯 PARTNER FOUND! Sending promo sequence...")
+                self.chat_session_id += 1 
+                current_session = self.chat_session_id
                 
+                logger.info("🎯 PARTNER FOUND! Starting promo sequence...")
+                
+                # Wait before sending promo
                 await asyncio.sleep(random.uniform(1.5, 3.0))
                 
-                if self.state != "chatting":
+                if self.state != "chatting" or self.chat_session_id != current_session:
                     return
 
                 promo = generate_random_message()
                 await self.client.send_message(TARGET_BOT, promo)
                 logger.info("✅ Promo sent!")
                 
+                # Wait before skipping
                 delay = random.uniform(7.0, 10.0)
                 logger.info(f"⏳ Waiting {delay:.1f}s before skipping to next...")
                 await asyncio.sleep(delay)
                 
-                if self.state == "chatting":
+                if self.state == "chatting" and self.chat_session_id == current_session:
                     await self.client.send_message(TARGET_BOT, "/next")
                     logger.info("✅ Sent /next command.")
 
-            # STEP 3: Partner Ended Chat
-            elif "Partner ended chat" in message_text or "Reopen" in message_text:
+            # STEP 4: Partner Ended Chat
+            elif any(word in message_text for word in ["Partner ended chat", "Chat ended", "Reopen"]):
                 self.state = "idle"
-                logger.info("⚠️ Partner ended chat. Finding a new one...")
+                logger.info("⚠️ Chat ended. Finding a new partner...")
                 await self.request_search()
 
-            # STEP 4: Main Menu or Start prompt
+            # STEP 5: Main Menu or Start prompt
             elif "Welcome" in message_text or "choose" in message_text or "/search" in message_text:
                 if self.state == "idle":
                     await self.request_search()
@@ -229,4 +248,4 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
-
+                    
