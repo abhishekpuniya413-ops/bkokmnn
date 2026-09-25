@@ -246,7 +246,7 @@ class MultiTargetTelegramPromoBot:
             logger.error(f"❌ Failed to start bot: {str(e)}")
             raise
 
-        async def process_message(self, event):
+            async def process_message(self, event):
         """Process incoming messages from Bot 1 targets"""
         try:
             message_text = event.message.text or ""
@@ -285,6 +285,7 @@ class MultiTargetTelegramPromoBot:
             logger.error(f"❌ Error processing message: {str(e)}")
             if 'sender_bot' in locals() and sender_bot:
                 self.statistics.record_error(sender_bot)
+                
                 
 
     async def process_bot2_message(self, event):
