@@ -49,6 +49,7 @@ BOT2_TARGET_BOTS = [bot.strip() for bot in os.getenv('TARGET_BOT', '').split(','
 # GLOBALS
 message_counters: Dict[str, int] = {}  # Counter per bot
 used_messages: Set[str] = set()
+
 MATCH_KEYWORDS = [
     "It's a match!",
     "Jenis kelamin",
@@ -58,6 +59,7 @@ MATCH_KEYWORDS = [
     "A partner has been found!",
     "Нашёл собеседника!"
 ]
+
 # Only trigger on partner disconnects. Do NOT add "Вы завершили" here or it will double-skip.
 DISCONNECT_KEYWORDS = [
     "Собеседник завершил",
@@ -192,7 +194,7 @@ class MultiTargetTelegramPromoBot:
         self.target_bot_entities: Dict[str, any] = {}
         self.is_running = True
         self.statistics = BotStatistics()
-        self.timeout_tasks: Dict[str, asyncio.Task] = {}  # Tracks individual bot 60s timeout tasks
+        self.timeout_tasks: Dict[str, asyncio.Task] = {}
 
         # Bot 2 state
         self.bot2_next_limit_reached = False
@@ -228,7 +230,7 @@ class MultiTargetTelegramPromoBot:
             async def handle_new_message(event):
                 await self.process_message(event)
 
-            # Handler for Bot 2 (Mutual Anonymous Chat) — only registered if targets are configured
+            # Handler for Bot 2 (Mutual Anonymous Chat)
             if BOT2_TARGET_BOTS:
                 logger.info(f"🤖 Bot 2 targets: {BOT2_TARGET_BOTS}")
 
@@ -246,7 +248,7 @@ class MultiTargetTelegramPromoBot:
             logger.error(f"❌ Failed to start bot: {str(e)}")
             raise
 
-            async def process_message(self, event):
+    async def process_message(self, event):
         """Process incoming messages from Bot 1 targets"""
         try:
             message_text = event.message.text or ""
@@ -285,8 +287,6 @@ class MultiTargetTelegramPromoBot:
             logger.error(f"❌ Error processing message: {str(e)}")
             if 'sender_bot' in locals() and sender_bot:
                 self.statistics.record_error(sender_bot)
-                
-                
 
     async def process_bot2_message(self, event):
         """Process incoming messages from Bot 2 (Mutual Anonymous Chat) targets"""
@@ -298,7 +298,6 @@ class MultiTargetTelegramPromoBot:
                 await asyncio.sleep(1)
 
                 stickers = await self.get_stickers()
-                # Use sticker index 1 for Bot 2
                 if len(stickers) >= 2:
                     await self.client.send_file(event.chat_id, stickers[1])
                 elif len(stickers) >= 1:
@@ -359,13 +358,12 @@ class MultiTargetTelegramPromoBot:
             if bot_username not in self.target_bot_entities:
                 return
 
-            # Ensure any previous tracking task is cleared before executing next action
             self.cancel_timeout_task(bot_username)
 
             await self.client.send_message(self.target_bot_entities[bot_username], "/next")
             logger.info(f"✅ Sent /next command to {bot_username}")
 
-            # Fire up a 60-second response monitor task
+            # Fire up a repeating response monitor task
             self.timeout_tasks[bot_username] = asyncio.create_task(
                 self.monitor_bot_timeout(bot_username)
             )
@@ -374,20 +372,24 @@ class MultiTargetTelegramPromoBot:
             self.statistics.record_error(bot_username)
 
     async def monitor_bot_timeout(self, bot_username: str):
-        """Asynchronously waits 60 seconds; triggers retry if target bot goes silent"""
+        """Continually checks if bot is stuck and forces /next if no valid response"""
         try:
-            await asyncio.sleep(60)
-            logger.warning(f"⏰ No response from {bot_username} for 60s after /next. Sending /next again...")
-            await self.send_next_command(bot_username)
+            # Keep looping until process_message successfully gets a match and cancels this
+            while True:
+                await asyncio.sleep(25)  # Wait 25 seconds
+                logger.warning(f"⏰ {bot_username} is stuck or ignoring us. Forcing /next...")
+                await self.client.send_message(self.target_bot_entities[bot_username], "/next")
         except asyncio.CancelledError:
-            # Task was cleared cleanly because the bot responded in time
             pass
 
     def cancel_timeout_task(self, bot_username: str):
         """Safely stops and discards a running timeout watcher"""
         task = self.timeout_tasks.get(bot_username)
-        if task and not task.done():
+        
+        # We check "task != asyncio.current_task()" to guarantee a timer can never accidentally cancel itself
+        if task and not task.done() and task != asyncio.current_task():
             task.cancel()
+        
         self.timeout_tasks[bot_username] = None
 
     async def start_health_server(self):
@@ -449,3 +451,4 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"❌ Error: {e}")
         time.sleep(60)
+    
