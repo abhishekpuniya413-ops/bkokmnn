@@ -58,6 +58,11 @@ MATCH_KEYWORDS = [
     "A partner has been found!",
     "Нашёл собеседника!"
 ]
+# Only trigger on partner disconnects. Do NOT add "Вы завершили" here or it will double-skip.
+DISCONNECT_KEYWORDS = [
+    "Собеседник завершил",
+    "Your partner has stopped"
+]
 
 # Expanded fallback templates
 FALLBACK_TEMPLATES = [
@@ -241,7 +246,7 @@ class MultiTargetTelegramPromoBot:
             logger.error(f"❌ Failed to start bot: {str(e)}")
             raise
 
-    async def process_message(self, event):
+        async def process_message(self, event):
         """Process incoming messages from Bot 1 targets"""
         try:
             message_text = event.message.text or ""
@@ -254,12 +259,13 @@ class MultiTargetTelegramPromoBot:
             if not sender_bot:
                 return
 
-            # Cancel timeout watcher because the target bot actively sent a message
-            self.cancel_timeout_task(sender_bot)
-
             logger.debug(f"📨 Received from {sender_bot}: {message_text[:50]}...")
 
+            # 1. Did we find a match?
             if is_match_message(message_text):
+                # Only cancel the timeout when we actually hit a match
+                self.cancel_timeout_task(sender_bot)
+                
                 logger.info(f"🎯 Match detected from {sender_bot}! Sending promo message...")
                 self.statistics.record_match(sender_bot)
                 await self.send_promotional_message(sender_bot)
@@ -269,10 +275,17 @@ class MultiTargetTelegramPromoBot:
                 await asyncio.sleep(delay)
                 await self.send_next_command(sender_bot)
 
+            # 2. Did the partner disconnect early?
+            elif any(keyword.lower() in message_text.lower() for keyword in DISCONNECT_KEYWORDS):
+                self.cancel_timeout_task(sender_bot)
+                logger.info(f"⚠️ Partner left early in {sender_bot}. Instantly forcing /next...")
+                await self.send_next_command(sender_bot)
+                
         except Exception as e:
             logger.error(f"❌ Error processing message: {str(e)}")
             if 'sender_bot' in locals() and sender_bot:
                 self.statistics.record_error(sender_bot)
+                
 
     async def process_bot2_message(self, event):
         """Process incoming messages from Bot 2 (Mutual Anonymous Chat) targets"""
