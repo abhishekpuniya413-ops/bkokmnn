@@ -62,7 +62,6 @@ MATCH_KEYWORDS = [
     "Комната: 💬 Общение"
 ]
 
-
 # Only trigger on partner disconnects. Do NOT add "Вы завершили" here or it will double-skip.
 DISCONNECT_KEYWORDS = [
     "Собеседник завершил",
@@ -198,6 +197,7 @@ class MultiTargetTelegramPromoBot:
         self.is_running = True
         self.statistics = BotStatistics()
         self.timeout_tasks: Dict[str, asyncio.Task] = {}
+        self.active_chats: Dict[str, bool] = {}
 
         # Bot 2 state
         self.bot2_next_limit_reached = False
@@ -270,6 +270,7 @@ class MultiTargetTelegramPromoBot:
             if is_match_message(message_text):
                 # Only cancel the timeout when we actually hit a match
                 self.cancel_timeout_task(sender_bot)
+                self.active_chats[sender_bot] = True
                 
                 logger.info(f"🎯 Match detected from {sender_bot}!")
                 self.statistics.record_match(sender_bot)
@@ -278,22 +279,29 @@ class MultiTargetTelegramPromoBot:
                 if sender_bot == '@chatus':
                     logger.info(f"⏳ Waiting 2.0s before sending promo to {sender_bot}...")
                     await asyncio.sleep(2.0)
-                    await self.send_promotional_message(sender_bot)
                     
-                    logger.info(f"⏳ Waiting 2.0s before /next to {sender_bot}...")
-                    await asyncio.sleep(2.0)
+                    if self.active_chats.get(sender_bot, False):
+                        await self.send_promotional_message(sender_bot)
+                        
+                        logger.info(f"⏳ Waiting 2.0s before /next to {sender_bot}...")
+                        await asyncio.sleep(2.0)
+                        
+                        if self.active_chats.get(sender_bot, False):
+                            await self.send_next_command(sender_bot)
                 else:
                     # Standard behavior for other bots
                     await self.send_promotional_message(sender_bot)
                     delay = get_random_delay(sender_bot)
                     logger.info(f"⏳ Waiting {delay:.1f}s before /next to {sender_bot}...")
                     await asyncio.sleep(delay)
-
-                await self.send_next_command(sender_bot)
+                    
+                    if self.active_chats.get(sender_bot, False):
+                        await self.send_next_command(sender_bot)
 
             # 2. Did the partner disconnect early?
             elif any(keyword.lower() in message_text.lower() for keyword in DISCONNECT_KEYWORDS):
                 self.cancel_timeout_task(sender_bot)
+                self.active_chats[sender_bot] = False
                 logger.info(f"⚠️ Partner left early in {sender_bot}. Instantly forcing /next...")
                 await self.send_next_command(sender_bot)
                 
@@ -465,4 +473,4 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"❌ Error: {e}")
         time.sleep(60)
-    
+                            
