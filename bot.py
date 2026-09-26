@@ -50,16 +50,16 @@ BOT2_TARGET_BOTS = [bot.strip() for bot in os.getenv('TARGET_BOT', '').split(','
 message_counters: Dict[str, int] = {}  # Counter per bot
 used_messages: Set[str] = set()
 
+# Primary Match Indicators
 MATCH_KEYWORDS = [
+    "Нашёл собеседника!",
+    "💎 PREMIUM Собеседник!",
     "It's a match!",
     "Jenis kelamin",
     "Ketertarikan:",
     "Pasangan telah ditemukan!",
     "Match found",
-    "A partner has been found!",
-    "Нашёл собеседника!",
-    "PREMIUM Собеседник!",
-    "Комната: 💬 Общение"
+    "A partner has been found!"
 ]
 
 # Only trigger on partner disconnects. Do NOT add "Вы завершили" here or it will double-skip.
@@ -107,15 +107,6 @@ def is_match_message(message_text: str) -> bool:
     if not message_text:
         return False
     return any(keyword.lower() in message_text.lower() for keyword in MATCH_KEYWORDS)
-
-def get_random_delay(bot_username: str = None) -> float:
-    """Get random delay based on bot-specific settings or default range"""
-    if bot_username and bot_username in TARGET_BOTS:
-        bot_config = TARGET_BOTS[bot_username]
-        min_delay = bot_config['min_delay']
-        max_delay = bot_config['max_delay']
-        return random.uniform(min_delay, max_delay)
-    return random.uniform(5.0, 12.0)
 
 def generate_random_message(bot_username: str) -> str:
     """Generate a random promotional message"""
@@ -197,7 +188,7 @@ class MultiTargetTelegramPromoBot:
         self.is_running = True
         self.statistics = BotStatistics()
         self.timeout_tasks: Dict[str, asyncio.Task] = {}
-        self.active_chats: Dict[str, bool] = {}
+        self.chat_states: Dict[str, str] = {}
 
         # Bot 2 state
         self.bot2_next_limit_reached = False
@@ -264,44 +255,45 @@ class MultiTargetTelegramPromoBot:
             if not sender_bot:
                 return
 
+            if sender_bot not in self.chat_states:
+                self.chat_states[sender_bot] = 'SEARCHING'
+
             logger.debug(f"📨 Received from {sender_bot}: {message_text[:50]}...")
 
             # 1. Did we find a match?
             if is_match_message(message_text):
-                # Only cancel the timeout when we actually hit a match
+                # Lock state to prevent race conditions from multi-part messages
+                if self.chat_states[sender_bot] == 'MATCHED':
+                    return
+                
                 self.cancel_timeout_task(sender_bot)
-                self.active_chats[sender_bot] = True
+                self.chat_states[sender_bot] = 'MATCHED'
                 
                 logger.info(f"🎯 Match detected from {sender_bot}!")
                 self.statistics.record_match(sender_bot)
                 
-                # Custom behavior specifically for @chatus
-                if sender_bot == '@chatus':
-                    logger.info(f"⏳ Waiting 2.0s before sending promo to {sender_bot}...")
+                # Wait 2.0s before sending text
+                logger.info(f"⏳ Waiting 2.0s before sending promo text to {sender_bot}...")
+                await asyncio.sleep(2.0)
+                
+                if self.chat_states[sender_bot] == 'MATCHED':
+                    await self.send_promotional_message(sender_bot)
+                    
+                    # Wait 2.0s before sending /next
+                    logger.info(f"⏳ Waiting 2.0s before sending /next to {sender_bot}...")
                     await asyncio.sleep(2.0)
                     
-                    if self.active_chats.get(sender_bot, False):
-                        await self.send_promotional_message(sender_bot)
-                        
-                        logger.info(f"⏳ Waiting 2.0s before /next to {sender_bot}...")
-                        await asyncio.sleep(2.0)
-                        
-                        if self.active_chats.get(sender_bot, False):
-                            await self.send_next_command(sender_bot)
-                else:
-                    # Standard behavior for other bots
-                    await self.send_promotional_message(sender_bot)
-                    delay = get_random_delay(sender_bot)
-                    logger.info(f"⏳ Waiting {delay:.1f}s before /next to {sender_bot}...")
-                    await asyncio.sleep(delay)
-                    
-                    if self.active_chats.get(sender_bot, False):
+                    if self.chat_states[sender_bot] == 'MATCHED':
+                        self.chat_states[sender_bot] = 'SEARCHING'
                         await self.send_next_command(sender_bot)
 
             # 2. Did the partner disconnect early?
             elif any(keyword.lower() in message_text.lower() for keyword in DISCONNECT_KEYWORDS):
+                if self.chat_states[sender_bot] == 'SEARCHING':
+                    return
+                    
                 self.cancel_timeout_task(sender_bot)
-                self.active_chats[sender_bot] = False
+                self.chat_states[sender_bot] = 'SEARCHING'
                 logger.info(f"⚠️ Partner left early in {sender_bot}. Instantly forcing /next...")
                 await self.send_next_command(sender_bot)
                 
@@ -396,7 +388,6 @@ class MultiTargetTelegramPromoBot:
     async def monitor_bot_timeout(self, bot_username: str):
         """Continually checks if bot is stuck and forces /next if no valid response"""
         try:
-            # Keep looping until process_message successfully gets a match and cancels this
             while True:
                 await asyncio.sleep(25)  # Wait 25 seconds
                 logger.warning(f"⏰ {bot_username} is stuck or ignoring us. Forcing /next...")
@@ -407,11 +398,8 @@ class MultiTargetTelegramPromoBot:
     def cancel_timeout_task(self, bot_username: str):
         """Safely stops and discards a running timeout watcher"""
         task = self.timeout_tasks.get(bot_username)
-        
-        # We check "task != asyncio.current_task()" to guarantee a timer can never accidentally cancel itself
         if task and not task.done() and task != asyncio.current_task():
             task.cancel()
-        
         self.timeout_tasks[bot_username] = None
 
     async def start_health_server(self):
@@ -473,4 +461,4 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"❌ Error: {e}")
         time.sleep(60)
-                            
+    
