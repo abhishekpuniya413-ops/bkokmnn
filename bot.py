@@ -274,7 +274,7 @@ class MultiTargetTelegramPromoBot:
                 
                 # Wait 2.0s before sending text
                 logger.info(f"⏳ Waiting 2.0s before sending promo text to {sender_bot}...")
-                await asyncio.sleep(2.0)
+                await asyncio.sleep(0.1)
                 
                 if self.chat_states[sender_bot] == 'MATCHED':
                     await self.send_promotional_message(sender_bot)
