@@ -29,7 +29,7 @@ PORT = int(os.getenv('PORT', 10000))
 
 # Multiple target bots with individual delay settings - configurable via environment
 DEFAULT_TARGET_BOTS = {
-    '@chatus': {'min_delay': 3.0, 'max_delay': 4.5},
+    '@chatus': {'min_delay': 2.0, 'max_delay': 2.0},
     '': {'min_delay': 5.0, 'max_delay': 12.0},
     '@random_pacar_bot': {'min_delay': 9.0, 'max_delay': 13.0},
 }
@@ -268,13 +268,24 @@ class MultiTargetTelegramPromoBot:
                 # Only cancel the timeout when we actually hit a match
                 self.cancel_timeout_task(sender_bot)
                 
-                logger.info(f"🎯 Match detected from {sender_bot}! Sending promo message...")
+                logger.info(f"🎯 Match detected from {sender_bot}!")
                 self.statistics.record_match(sender_bot)
-                await self.send_promotional_message(sender_bot)
+                
+                # Custom behavior specifically for @chatus
+                if sender_bot == '@chatus':
+                    logger.info(f"⏳ Waiting 2.0s before sending promo to {sender_bot}...")
+                    await asyncio.sleep(2.0)
+                    await self.send_promotional_message(sender_bot)
+                    
+                    logger.info(f"⏳ Waiting 2.0s before /next to {sender_bot}...")
+                    await asyncio.sleep(2.0)
+                else:
+                    # Standard behavior for other bots
+                    await self.send_promotional_message(sender_bot)
+                    delay = get_random_delay(sender_bot)
+                    logger.info(f"⏳ Waiting {delay:.1f}s before /next to {sender_bot}...")
+                    await asyncio.sleep(delay)
 
-                delay = get_random_delay(sender_bot)
-                logger.info(f"⏳ Waiting {delay:.1f}s before /next to {sender_bot}...")
-                await asyncio.sleep(delay)
                 await self.send_next_command(sender_bot)
 
             # 2. Did the partner disconnect early?
