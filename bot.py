@@ -57,7 +57,8 @@ MATCH_KEYWORDS = [
     "Pasangan telah ditemukan!",
     "Match found",
     "A partner has been found!",
-    "Нашёл собеседника!"
+    "Нашёл собеседника!",
+    "💎 PREMIUM Собеседник!"
 ]
 
 # Only trigger on partner disconnects. Do NOT add "Вы завершили" here or it will double-skip.
