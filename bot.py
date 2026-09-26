@@ -103,10 +103,24 @@ SHORT_PROMOS = [
 
 # UTILITY FUNCTIONS
 def is_match_message(message_text: str) -> bool:
-    """Check if message indicates a match"""
+    """Check if message indicates a match (supporting regular and premium)"""
     if not message_text:
         return False
-    return any(keyword.lower() in message_text.lower() for keyword in MATCH_KEYWORDS)
+    
+    # Convert text to lowercase for reliable matching
+    text_lower = message_text.lower()
+    
+    # Check against the standard MATCH_KEYWORDS list
+    for keyword in MATCH_KEYWORDS:
+        if keyword.lower() in text_lower:
+            return True
+            
+    # Additional robust check for premium chat UI elements (e.g., room and reaction counters)
+    if "комната:" in text_lower and ("собеседник" in text_lower or "реакции:" in text_lower or "match" in text_lower):
+        return True
+        
+    return False
+    
 
 def generate_random_message(bot_username: str) -> str:
     """Generate a random promotional message"""
