@@ -10,31 +10,28 @@ import time
 from typing import Set, Dict
 from telethon import TelegramClient, events
 
-# LOGGING (Configured early to prevent startup parsing errors)
+# LOGGING
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
 
-# CONFIGURATION - Use environment variables for security
+# CONFIGURATION
 API_ID = int(os.getenv('API_ID', '0'))
 API_HASH = os.getenv('API_HASH', '')
 PHONE_NUMBER = os.getenv('PHONE_NUMBER', '')
 PROMO_BOT = os.getenv('PROMO_BOT', 't.me/InstantTalkBot')
 SESSION_NAME = os.getenv('SESSION_NAME', 'onAnonBot')
 
-# Add port for Render (required for web services)
 PORT = int(os.getenv('PORT', 10000))
 
-# Multiple target bots with individual delay settings - configurable via environment
 DEFAULT_TARGET_BOTS = {
     '@chatus': {'min_delay': 2.0, 'max_delay': 2.0},
     '': {'min_delay': 5.0, 'max_delay': 12.0},
     '@random_pacar_bot': {'min_delay': 9.0, 'max_delay': 13.0},
 }
 
-# Parse TARGET_BOTS from environment variable or use default
 try:
     TARGET_BOTS = json.loads(os.getenv('TARGET_BOTS', '{}'))
     if not TARGET_BOTS:
@@ -43,14 +40,11 @@ except (json.JSONDecodeError, TypeError):
     logger.warning("⚠️ Invalid TARGET_BOTS format, using defaults")
     TARGET_BOTS = DEFAULT_TARGET_BOTS
 
-# Bot 2: Mutual Anonymous Chat target bots (comma-separated via TARGET_BOT env var)
 BOT2_TARGET_BOTS = [bot.strip() for bot in os.getenv('TARGET_BOT', '').split(',') if bot.strip()]
 
-# GLOBALS
-message_counters: Dict[str, int] = {}  # Counter per bot
+message_counters: Dict[str, int] = {}
 used_messages: Set[str] = set()
 
-# Primary Match Indicators
 MATCH_KEYWORDS = [
     "Нашёл собеседника!",
     "💎 PREMIUM Собеседник!",
@@ -62,98 +56,58 @@ MATCH_KEYWORDS = [
     "A partner has been found!"
 ]
 
-# Only trigger on partner disconnects. Do NOT add "Вы завершили" here or it will double-skip.
 DISCONNECT_KEYWORDS = [
     "Собеседник завершил",
     "Your partner has stopped"
 ]
 
-# Expanded fallback templates
 FALLBACK_TEMPLATES = [
-"Cari InstantTalkBot di Telegram buat ngobrol random sambil main catur atau UNO ♟️🎮",
-"Gabut parah? Cari InstantTalkBot di Telegram dan mabar UNO bareng orang random! 🃏",
-"Cari temen ngobrol dari luar negeri? Cari InstantTalkBot di Telegram 🌍✨",
-"Main catur sambil curhat santai? Cari InstantTalkBot di Telegram 😎",
-"Daripada bengong, cari InstantTalkBot di Telegram dan main game gratis 🎲",
-"Lagi nyari temen ngobrol yang nyambung? Cari InstantTalkBot di Telegram 🤝",
-"Bosan chat yang itu-itu aja? Cari InstantTalkBot di Telegram, ada game serunya! 🎯",
-"Ngobrol anonim tapi bisa sambil main UNO? Cari InstantTalkBot di Telegram 🃏🔥",
-"Lagi nyari lawan catur yang seru? Cari InstantTalkBot di Telegram ♟️",
-"Pengen lancar bahasa Inggris? Cari temen chat global di InstantTalkBot lewat Telegram 🗣️",
-"Chatting anti garing? Cari InstantTalkBot di Telegram 😌",
-"Scroll mulu? Cari InstantTalkBot di Telegram dan kenalan sama orang baru 💀",
-"Bukan sekadar anon chat biasa, cari InstantTalkBot di Telegram dan rasain sendiri keseruannya ✅",
-"Mabar UNO atau catur gratis tanpa download aplikasi? Cari InstantTalkBot di Telegram 📱",
-"Nyari temen curhat yang asik dan gak ribet? Cari InstantTalkBot di Telegram 🙌",
-"Vibes-nya adem, no mesum-mesum club 😤 Cari InstantTalkBot di Telegram",
-"Stress ngerjain tugas? Refreshing bentar, cari InstantTalkBot di Telegram 😭",
-"Chat random cepat dan aman? Cari InstantTalkBot di Telegram ⚡",
-"Gabut malam-malam? Cari InstantTalkBot di Telegram, selalu ada yang online 🌙",
-"Main game bareng stranger dari mana aja? Cari InstantTalkBot di Telegram 👾",
-"Bikin hari gabutmu jadi seru lewat game & chat di InstantTalkBot 💥",
-"Bebas skip sampai nemu yang beneran cocok! Cari InstantTalkBot di Telegram 😌",
-"Temen lagi sibuk semua? Cari temen baru di InstantTalkBot lewat Telegram 😏",
-"Komunitas chat random paling asik, cari InstantTalkBot di Telegram 🚀",
-"Mau skip atau lanjut? Kendali penuh di tanganmu 🎮 Cari InstantTalkBot di Telegram"
+    "Cari InstantTalkBot di Telegram buat ngobrol random sambil main catur atau UNO ♟️🎮",
+    "Gabut parah? Cari InstantTalkBot di Telegram dan mabar UNO bareng orang random! 🃏",
+    "Cari temen ngobrol dari luar negeri? Cari InstantTalkBot di Telegram 🌍✨",
+    "Main catur sambil curhat santai? Cari InstantTalkBot di Telegram 😎",
+    "Daripada bengong, cari InstantTalkBot di Telegram dan main game gratis 🎲",
+    "Lagi nyari temen ngobrol yang nyambung? Cari InstantTalkBot di Telegram 🤝",
+    "Bosan chat yang itu-itu aja? Cari InstantTalkBot di Telegram, ada game serunya! 🎯",
+    "Ngobrol anonim tapi bisa sambil main UNO? Cari InstantTalkBot di Telegram 🃏🔥"
 ]
 
 SHORT_PROMOS = [
     "Anon chat simple & seru 👉 instanttalkb0t"
 ]
 
-# UTILITY FUNCTIONS
 def is_match_message(message_text: str) -> bool:
-    """Check if message indicates a match (supporting regular and premium)"""
     if not message_text:
         return False
-    
-    # Convert text to lowercase for reliable matching
     text_lower = message_text.lower()
-    
-    # Check against the standard MATCH_KEYWORDS list
     for keyword in MATCH_KEYWORDS:
         if keyword.lower() in text_lower:
             return True
-            
-    # Additional robust check for premium chat UI elements (e.g., room and reaction counters)
     if "комната:" in text_lower and ("собеседник" in text_lower or "реакции:" in text_lower or "match" in text_lower):
         return True
-        
     return False
-    
 
 def generate_random_message(bot_username: str) -> str:
-    """Generate a random promotional message"""
     if bot_username == '@chatus':
         return "@ gta347943"
-        
     if bot_username not in message_counters:
         message_counters[bot_username] = 0
     message_counters[bot_username] += 1
 
-    if random.random() < 0.3:
-        template = random.choice(SHORT_PROMOS)
-    else:
-        template = random.choice(FALLBACK_TEMPLATES)
-
+    template = random.choice(SHORT_PROMOS) if random.random() < 0.3 else random.choice(FALLBACK_TEMPLATES)
     message = template.format(bot=PROMO_BOT)
     message_key = f"{bot_username}:{message}"
     
     if message_key in used_messages:
-        variations = [
-            f"{message} ✨", f"{message} 🔥", f"{message} 💯", f"{message} ({message_counters[bot_username]})"
-        ]
+        variations = [f"{message} ✨", f"{message} 🔥", f"{message} 💯", f"{message} ({message_counters[bot_username]})"]
         message = random.choice(variations)
 
     used_messages.add(message_key)
-    logger.info(f"Generated message #{message_counters[bot_username]} for {bot_username}: {message[:50]}...")
     return message
 
 def validate_config():
-    """Validate required environment variables"""
     required_vars = ['API_ID', 'API_HASH', 'PHONE_NUMBER']
     missing_vars = [var for var in required_vars if not os.getenv(var)]
-    
     if missing_vars:
         logger.error(f"❌ Missing required environment variables: {', '.join(missing_vars)}")
         return False
@@ -162,7 +116,6 @@ def validate_config():
         return False
     return True
 
-# STATISTICS CLASS
 class BotStatistics:
     def __init__(self):
         self.stats = {bot: {'matches': 0, 'messages_sent': 0, 'errors': 0} for bot in TARGET_BOTS.keys()}
@@ -187,7 +140,6 @@ class BotStatistics:
             'total_errors': sum(bot['errors'] for bot in self.stats.values())
         }
 
-# MAIN BOT CLASS
 class MultiTargetTelegramPromoBot:
     def __init__(self):
         from telethon.sessions import StringSession
@@ -203,12 +155,9 @@ class MultiTargetTelegramPromoBot:
         self.statistics = BotStatistics()
         self.timeout_tasks: Dict[str, asyncio.Task] = {}
         self.chat_states: Dict[str, str] = {}
-
-        # Bot 2 state
         self.bot2_next_limit_reached = False
 
     async def start(self):
-        """Start the bot"""
         try:
             if not validate_config():
                 raise ValueError("Invalid configuration")
@@ -218,7 +167,7 @@ class MultiTargetTelegramPromoBot:
 
             if not os.getenv('SESSION_STRING'):
                 session_string = self.client.session.save()
-                logger.info(f"📝 Session string (save this as SESSION_STRING env var): {session_string}")
+                logger.info(f"📝 Session string: {session_string}")
 
             for bot_username in TARGET_BOTS.keys():
                 try:
@@ -229,26 +178,19 @@ class MultiTargetTelegramPromoBot:
                     logger.error(f"❌ Failed to find bot {bot_username}: {str(e)}")
                     continue
 
-            if not self.target_bot_entities:
-                logger.error("❌ No target bots found! Exiting...")
-                return
+            # Handler for Bot 1 (Text promo targets)
+            if self.target_bot_entities:
+                @self.client.on(events.NewMessage(chats=list(self.target_bot_entities.values())))
+                async def handle_new_message(event):
+                    await self.process_message(event)
 
-            # Handler for Bot 1 (promo bots)
-            @self.client.on(events.NewMessage(chats=list(self.target_bot_entities.values())))
-            async def handle_new_message(event):
-                await self.process_message(event)
-
-            # Handler for Bot 2 (Mutual Anonymous Chat)
+            # Handler for Bot 2 (Sticker targets: Anonity, DefiantChatBot, TasterChatBot)
             if BOT2_TARGET_BOTS:
-                logger.info(f"🤖 Bot 2 targets: {BOT2_TARGET_BOTS}")
-
+                logger.info(f"🤖 Bot 2 targets enabled: {BOT2_TARGET_BOTS}")
                 @self.client.on(events.NewMessage(chats=BOT2_TARGET_BOTS))
                 async def handle_bot2_message(event):
                     await self.process_bot2_message(event)
-            else:
-                logger.info("ℹ️ No TARGET_BOT env var set — Bot 2 handler skipped")
 
-            logger.info(f"🤖 Started monitoring {len(self.target_bot_entities)} bots for matches...")
             await self.start_health_server()
             await self.client.run_until_disconnected()
 
@@ -272,174 +214,180 @@ class MultiTargetTelegramPromoBot:
             if sender_bot not in self.chat_states:
                 self.chat_states[sender_bot] = 'SEARCHING'
 
-            logger.debug(f"📨 Received from {sender_bot}: {message_text[:50]}...")
-
-            # 1. Did we find a match?
             if is_match_message(message_text):
-                # Lock state to prevent race conditions from multi-part messages
                 if self.chat_states[sender_bot] == 'MATCHED':
                     return
                 
                 self.cancel_timeout_task(sender_bot)
                 self.chat_states[sender_bot] = 'MATCHED'
-                
-                logger.info(f"🎯 Match detected from {sender_bot}!")
                 self.statistics.record_match(sender_bot)
                 
-                # Wait 2.0s before sending text
-                logger.info(f"⏳ Waiting 2.0s before sending promo text to {sender_bot}...")
                 await asyncio.sleep(0.1)
                 
                 if self.chat_states[sender_bot] == 'MATCHED':
                     await self.send_promotional_message(sender_bot)
-                    
-                    # Wait 2.0s before sending /next
-                    logger.info(f"⏳ Waiting 2.0s before sending /next to {sender_bot}...")
                     await asyncio.sleep(2.0)
                     
                     if self.chat_states[sender_bot] == 'MATCHED':
                         self.chat_states[sender_bot] = 'SEARCHING'
                         await self.send_next_command(sender_bot)
 
-            # 2. Did the partner disconnect early?
             elif any(keyword.lower() in message_text.lower() for keyword in DISCONNECT_KEYWORDS):
                 if self.chat_states[sender_bot] == 'SEARCHING':
                     return
                     
                 self.cancel_timeout_task(sender_bot)
                 self.chat_states[sender_bot] = 'SEARCHING'
-                logger.info(f"⚠️ Partner left early in {sender_bot}. Instantly forcing /next...")
                 await self.send_next_command(sender_bot)
                 
         except Exception as e:
             logger.error(f"❌ Error processing message: {str(e)}")
-            if 'sender_bot' in locals() and sender_bot:
-                self.statistics.record_error(sender_bot)
 
     async def process_bot2_message(self, event):
-        """Process incoming messages from Bot 2 (Sticker Targets like Anonity, Taster, Defiant)"""
+        """Process incoming messages for Sticker targets (Taster, Defiant, Anonity)"""
         try:
-            text = event.raw_text
+            text = event.raw_text or ""
+            chat_id = event.chat_id
 
-            # Determine the appropriate action commands based on the bot's language
+            # -------------------------------------------------------------
+            # 1. TASTER CHAT BOT: CONFIRMATION PROMPT ("Діалог буде завершено...")
+            # -------------------------------------------------------------
+            if 'Діалог буде завершено. Шукати наступного' in text:
+                logger.info("Bot 2 (Taster): Received finish confirmation. Responding 'Так, шукати далі'")
+                await asyncio.sleep(1)
+                await event.respond('Так, шукати далі')
+                return
+
+            # -------------------------------------------------------------
+            # 2. MATCH DETECTION & STICKER SENDING
+            # -------------------------------------------------------------
+            is_match = False
             next_cmd = '/next'
-            stop_cmd = '/stop'
-            search_cmd = '/search'
 
-            if 'Ми знайшли вам когось' in text or 'Діалог' in text or 'користувач' in text:
+            # DefiantChatBot match
+            if '✨ Partner found! ✨' in text or "It's a new match!" in text:
+                is_match = True
+                next_cmd = '➡️ Next Partner'
+
+            # Anonity Chat Bot match
+            elif 'Partner found 😺' in text:
+                is_match = True
+                next_cmd = '/next'
+
+            # Taster Chat Bot match
+            elif 'Ми знайшли вам когось, можете розпочати спілкування:' in text or 'ID Діалогу:' in text:
+                is_match = True
                 next_cmd = '🔭'
-                stop_cmd = '⛔️'
-                search_cmd = '🔭'
 
-            # 1. MATCH HANDLER
-            if any(phrase in text for phrase in [
-                'Partner found 😺', 
-                '✨ Partner found! ✨',
-                'Ми знайшли вам когось, можете розпочати спілкування:'
-            ]):
-                logger.info("Bot 2: Partner found. Fetching sticker...")
+            if is_match:
+                logger.info(f"Bot 2: Match detected! Sending sticker to chat {chat_id}...")
                 await asyncio.sleep(1)
 
                 stickers = await self.get_stickers()
                 if stickers:
-                    # Send the most recent sticker from saved messages
-                    await self.client.send_file(event.chat_id, stickers[0])
+                    await self.client.send_file(chat_id, stickers[0])
+                    logger.info("Bot 2: Sent recent sticker from Saved Messages.")
 
-                await asyncio.sleep(2)
+                await asyncio.sleep(1.5)
                 if self.bot2_next_limit_reached:
-                    await event.respond(stop_cmd)
+                    await event.respond('/stop')
                 else:
                     await event.respond(next_cmd)
+                return
 
-            # 2. DISCONNECT / END OF CHAT HANDLER
-            elif any(phrase in text for phrase in [
-                'You stopped the chat',
-                'Your partner has stopped',
-                'Your partner stopped the chat',
-                'Your partner has left the chat',
-                'Type /search to find a new partner',
-                'Інший користувач ⛔ завершив діалог',
-                'Діалог буде завершено',
-                'Шукати наступного 🔭 співрозмовника?'
+            # -------------------------------------------------------------
+            # 3. DISCONNECT & SEARCH RESUMPTION HANDLERS
+            # -------------------------------------------------------------
+            # DefiantChatBot Disconnects / Prompts
+            if any(phrase in text for phrase in [
+                '🔴 Your partner has left the chat',
+                'Type /search to start a new conversation'
             ]):
-                logger.info("Bot 2: Chat ended properly. Initiating search...")
+                logger.info("Bot 2 (Defiant): Chat ended. Initiating search...")
                 await asyncio.sleep(1)
-                await event.respond(search_cmd)
+                await event.respond('🚀 Find a Partner')
 
-            # 3. RATE LIMIT HANDLER
+            # Anonity Disconnects
+            elif any(phrase in text for phrase in [
+                'Your partner stopped the chat 🙄',
+                'Your partner has stopped the chat',
+                'Type /search to find a new partner',
+                '👋 Ready for another anonymous chat?'
+            ]):
+                logger.info("Bot 2 (Anonity): Chat ended. Initiating search...")
+                await asyncio.sleep(1)
+                await event.respond('🚀 Find a partner')
+
+            # Taster Disconnects
+            elif any(phrase in text for phrase in [
+                'Інший користувач ⛔ завершив діалог',
+                'Що робимо далі?'
+            ]):
+                logger.info("Bot 2 (Taster): Partner left. Continuing search...")
+                await asyncio.sleep(1)
+                await event.respond('Так, шукати далі')
+
+            # -------------------------------------------------------------
+            # 4. RATE LIMIT SAFEGUARD
+            # -------------------------------------------------------------
             elif "daily /next limit" in text.lower():
                 self.bot2_next_limit_reached = True
+                logger.warning("Bot 2: Daily limit reached. Stopping chat.")
                 await asyncio.sleep(1)
-                await event.respond(stop_cmd)
+                await event.respond('/stop')
 
         except Exception as e:
-            logger.error(f"❌ Bot 2 error processing message: {str(e)}")
+            logger.error(f"❌ Bot 2 error: {str(e)}")
 
     async def get_stickers(self):
-        """Fetch the most recent sticker from saved messages (Bot 2 helper)"""
+        """Fetch the most recent sticker from Saved Messages ('me')"""
         stickers = []
         try:
-            # Iterating through 'me' fetches messages from Saved Messages[span_1](start_span)[span_1](end_span)
-            async for message in self.client.iter_messages('me', limit=30):
+            async for message in self.client.iter_messages('me', limit=20):
                 if message.sticker:
                     stickers.append(message.document)
-                if len(stickers) >= 1: # Reduced to fetch only the 1 most recent
                     break
         except Exception as e:
             logger.error(f"Error fetching stickers: {e}")
         return stickers
 
     async def send_promotional_message(self, bot_username: str):
-        """Send a promotional message to specific bot"""
         try:
             if bot_username not in self.target_bot_entities:
                 return
             promo_message = generate_random_message(bot_username)
             await self.client.send_message(self.target_bot_entities[bot_username], promo_message)
-            logger.info(f"✅ Promotional message sent to {bot_username}!")
             self.statistics.record_message_sent(bot_username)
         except Exception as e:
             logger.error(f"❌ Failed to send promo message to {bot_username}: {str(e)}")
-            self.statistics.record_error(bot_username)
 
     async def send_next_command(self, bot_username: str):
-        """Send /next command to specific bot and start response guard"""
         try:
             if bot_username not in self.target_bot_entities:
                 return
-
             self.cancel_timeout_task(bot_username)
-
             await self.client.send_message(self.target_bot_entities[bot_username], "/next")
-            logger.info(f"✅ Sent /next command to {bot_username}")
-
-            # Fire up a repeating response monitor task
             self.timeout_tasks[bot_username] = asyncio.create_task(
                 self.monitor_bot_timeout(bot_username)
             )
         except Exception as e:
             logger.error(f"❌ Failed to send /next to {bot_username}: {str(e)}")
-            self.statistics.record_error(bot_username)
 
     async def monitor_bot_timeout(self, bot_username: str):
-        """Continually checks if bot is stuck and forces /next if no valid response"""
         try:
             while True:
-                await asyncio.sleep(25)  # Wait 25 seconds
-                logger.warning(f"⏰ {bot_username} is stuck or ignoring us. Forcing /next...")
+                await asyncio.sleep(25)
                 await self.client.send_message(self.target_bot_entities[bot_username], "/next")
         except asyncio.CancelledError:
             pass
 
     def cancel_timeout_task(self, bot_username: str):
-        """Safely stops and discards a running timeout watcher"""
         task = self.timeout_tasks.get(bot_username)
         if task and not task.done() and task != asyncio.current_task():
             task.cancel()
         self.timeout_tasks[bot_username] = None
 
     async def start_health_server(self):
-        """Start a simple HTTP server for Render health checks with statistics"""
         from aiohttp import web
         
         async def health_check(request):
@@ -448,21 +396,10 @@ class MultiTargetTelegramPromoBot:
         async def stats_endpoint(request):
             return web.json_response(self.statistics.get_stats())
         
-        async def config_endpoint(request):
-            return web.json_response({
-                'target_bots': list(TARGET_BOTS.keys()),
-                'bot_configs': TARGET_BOTS,
-                'promo_bot': PROMO_BOT,
-                'connected_bots': len(self.target_bot_entities),
-                'bot2_targets': BOT2_TARGET_BOTS,
-                'bot2_next_limit_reached': self.bot2_next_limit_reached,
-            })
-        
         app = web.Application()
         app.router.add_get('/', health_check)
         app.router.add_get('/health', health_check)
         app.router.add_get('/stats', stats_endpoint)
-        app.router.add_get('/config', config_endpoint)
         
         runner = web.AppRunner(app)
         await runner.setup()
@@ -470,10 +407,8 @@ class MultiTargetTelegramPromoBot:
         await site.start()
         logger.info(f"🌐 Health server started on port {PORT}")
 
-# MAIN FUNCTION
 async def main():
-    print("🚀 Starting Multi-Target Telegram Promotional Bot for Render...")
-    print("=" * 50)
+    print("🚀 Starting Telegram Promotional Bot...")
     bot = MultiTargetTelegramPromoBot()
     try:
         await bot.start()
@@ -485,7 +420,6 @@ async def main():
     finally:
         try:
             await bot.client.disconnect()
-            logger.info("🔌 Bot disconnected cleanly")
         except:
             pass
 
@@ -497,3 +431,4 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"❌ Error: {e}")
         time.sleep(60)
+                    
