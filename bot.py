@@ -194,7 +194,7 @@ class MultiTargetTelegramPromoBot:
                 async def handle_new_message(event):
                     await self.process_message(event)
 
-            # Resolve Bot 2 Targets (Crucial fix: Resolving @TasterChatBot before listening)
+            # Resolve Bot 2 Targets (@TasterChatBot)
             if BOT2_TARGET_BOTS:
                 for b in BOT2_TARGET_BOTS:
                     if not b: continue
@@ -258,11 +258,11 @@ class MultiTargetTelegramPromoBot:
             logger.error(f"❌ Error processing message: {str(e)}")
 
     async def process_bot2_message(self, event):
-        """Process incoming messages from Bot 2 / @TasterChatBot targets"""
+        """Process incoming messages from @TasterChatBot matching the exact video flow"""
         try:
-            # Force string to lowercase for bulletproof matching
             text = (event.raw_text or "").lower()
 
+            # 1. Partner Found -> Send Sticker -> Wait 2s -> Send 🔭
             if 'partner found' in text or 'ми знайшли вам когось' in text:
                 logger.info("Bot 2 / TasterChatBot: Match found! Fetching most recent sticker...")
                 await asyncio.sleep(1)
@@ -274,32 +274,34 @@ class MultiTargetTelegramPromoBot:
                 else:
                     logger.warning("⚠️ No sticker found in Saved Messages!")
 
-                await asyncio.sleep(2)
+                # Wait exactly two seconds as requested
+                await asyncio.sleep(2.0)
+                
                 if self.bot2_next_limit_reached:
                     await event.respond('/stop')
                 else:
                     if 'ми знайшли вам когось' in text:
-                        # Send exact menu text command to skip to next chat
-                        await event.respond('🔎 | шукати далі')
-                        logger.info("✅ Skipped to next partner (Sent '🔎 | шукати далі')")
+                        await event.respond('🔭')
+                        logger.info("✅ Sent '🔭' to end current chat.")
                     else:
                         await event.respond('/next')
 
+            # 2. Chat ended prompt -> Send 'Так, шукати далі'
             elif any(phrase in text for phrase in [
-                'you stopped the chat',
-                'your partner has stopped the chat',
-                'type /search to find a new partner',
                 'діалог буде завершено',
                 'шукати наступного',
                 'співрозмовник завершив',
-                'діалог завершено'
+                'діалог завершено',
+                'you stopped the chat',
+                'your partner has stopped the chat',
+                'type /search to find a new partner'
             ]):
-                logger.info("Bot 2 / TasterChatBot: Dialogue ended. Starting new search...")
+                logger.info("Bot 2 / TasterChatBot: Dialogue ended. Responding to prompt...")
                 await asyncio.sleep(1)
+                
                 if any(k in text for k in ['діалог', 'шукати', 'співрозмовник']):
-                    # When partner disconnects early, the bot provides a reply keyboard. 
                     await event.respond('Так, шукати далі')
-                    logger.info("✅ Pressed 'Так, шукати далі' on reply keyboard.")
+                    logger.info("✅ Sent 'Так, шукати далі' to find the next partner.")
                 else:
                     await event.respond('/search')
 
@@ -395,3 +397,4 @@ if __name__ == "__main__":
         asyncio.run(main())
     except KeyboardInterrupt:
         pass
+    
