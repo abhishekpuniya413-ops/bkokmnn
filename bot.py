@@ -1,4 +1,4 @@
-# Telegram Promotional Bot - Render Deployment Version (Multi-Target)
+# Telegram Promotional & Sticker Bot - Render Deployment Version (Multi-Target)
 # Requirements: telethon aiohttp
 
 import asyncio
@@ -10,48 +10,41 @@ import time
 from typing import Set, Dict
 from telethon import TelegramClient, events
 
-# LOGGING (Configured early to prevent startup parsing errors)
+# LOGGING
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
 
-# CONFIGURATION - Use environment variables for security
+# CONFIGURATION
 API_ID = int(os.getenv('API_ID', '0'))
 API_HASH = os.getenv('API_HASH', '')
 PHONE_NUMBER = os.getenv('PHONE_NUMBER', '')
 PROMO_BOT = os.getenv('PROMO_BOT', 't.me/InstantTalkBot')
 SESSION_NAME = os.getenv('SESSION_NAME', 'onAnonBot')
-
-# Add port for Render (required for web services)
 PORT = int(os.getenv('PORT', 10000))
 
-# Multiple target bots with individual delay settings - configurable via environment
+# --- BOT 1 CONFIGURATION (Promotional Chat Bots) ---
 DEFAULT_TARGET_BOTS = {
     '@chatus': {'min_delay': 2.0, 'max_delay': 2.0},
-    '': {'min_delay': 5.0, 'max_delay': 12.0},
-    '@random_pacar_bot': {'min_delay': 9.0, 'max_delay': 13.0},
 }
 
-# Parse TARGET_BOTS from environment variable or use default
 try:
     TARGET_BOTS = json.loads(os.getenv('TARGET_BOTS', '{}'))
     if not TARGET_BOTS:
         TARGET_BOTS = DEFAULT_TARGET_BOTS
 except (json.JSONDecodeError, TypeError):
-    logger.warning("⚠️ Invalid TARGET_BOTS format, using defaults")
     TARGET_BOTS = DEFAULT_TARGET_BOTS
 
-# Bot 2: Target bots (e.g. @TasterChatBot, comma-separated via TARGET_BOT env var)
+# --- BOT 2 CONFIGURATION (Sticker Bot / @TasterChatBot) ---
 TARGET_BOT_ENV = os.getenv('TARGET_BOT', '@TasterChatBot')
 BOT2_TARGET_BOTS = [bot.strip() for bot in TARGET_BOT_ENV.split(',') if bot.strip()]
 
 # GLOBALS
-message_counters: Dict[str, int] = {}  # Counter per bot
+message_counters: Dict[str, int] = {}
 used_messages: Set[str] = set()
 
-# Primary Match Indicators for Bot 1
 MATCH_KEYWORDS = [
     "Нашёл собеседника!",
     "💎 PREMIUM Собеседник!",
@@ -63,7 +56,6 @@ MATCH_KEYWORDS = [
     "A partner has been found!"
 ]
 
-# Only trigger on partner disconnects for Bot 1
 DISCONNECT_KEYWORDS = [
     "Собеседник завершил",
     "Your partner has stopped"
@@ -83,7 +75,6 @@ SHORT_PROMOS = [
     "Anon chat simple & seru 👉 instanttalkb0t"
 ]
 
-# UTILITY FUNCTIONS
 def is_match_message(message_text: str) -> bool:
     if not message_text:
         return False
@@ -124,7 +115,6 @@ def validate_config():
         return False
     return True
 
-# STATISTICS CLASS
 class BotStatistics:
     def __init__(self):
         self.stats = {bot: {'matches': 0, 'messages_sent': 0, 'errors': 0} for bot in TARGET_BOTS.keys()}
@@ -149,7 +139,6 @@ class BotStatistics:
             'total_errors': sum(bot['errors'] for bot in self.stats.values())
         }
 
-# MAIN BOT CLASS
 class MultiTargetTelegramPromoBot:
     def __init__(self):
         from telethon.sessions import StringSession
@@ -176,25 +165,22 @@ class MultiTargetTelegramPromoBot:
             await self.client.start(phone=PHONE_NUMBER)
             logger.info("✅ Telegram client started successfully")
 
-            if not os.getenv('SESSION_STRING'):
-                session_string = self.client.session.save()
-                logger.info(f"📝 Session string (save this as SESSION_STRING env var): {session_string}")
-
-            # Resolve Bot 1 Targets
+            # 1. Resolve Bot 1 Targets (Promo Bots)
             for bot_username in TARGET_BOTS.keys():
                 if not bot_username: continue
                 try:
                     entity = await self.client.get_entity(bot_username)
                     self.target_bot_entities[bot_username] = entity
+                    logger.info(f"✅ Found Bot 1 target: {bot_username}")
                 except Exception as e:
-                    logger.error(f"❌ Failed to find bot {bot_username}: {str(e)}")
+                    logger.error(f"❌ Failed to find Bot 1 target {bot_username}: {str(e)}")
 
             if self.target_bot_entities:
                 @self.client.on(events.NewMessage(chats=list(self.target_bot_entities.values())))
                 async def handle_new_message(event):
                     await self.process_message(event)
 
-            # Resolve Bot 2 Targets (@TasterChatBot)
+            # 2. Resolve Bot 2 Targets (@TasterChatBot)
             if BOT2_TARGET_BOTS:
                 for b in BOT2_TARGET_BOTS:
                     if not b: continue
@@ -212,7 +198,7 @@ class MultiTargetTelegramPromoBot:
             else:
                 logger.info("ℹ️ No TARGET_BOT env var set — Bot 2 handler skipped")
 
-            logger.info("🤖 Started monitoring bots for matches...")
+            logger.info("🤖 Started monitoring all target bots...")
             await self.start_health_server()
             await self.client.run_until_disconnected()
 
@@ -255,16 +241,16 @@ class MultiTargetTelegramPromoBot:
                 await self.send_next_command(sender_bot)
                 
         except Exception as e:
-            logger.error(f"❌ Error processing message: {str(e)}")
+            logger.error(f"❌ Error processing Bot 1 message: {str(e)}")
 
     async def process_bot2_message(self, event):
-        """Process incoming messages from @TasterChatBot matching the exact video flow"""
+        """Process incoming messages from @TasterChatBot matching your custom video sequence"""
         try:
             text = (event.raw_text or "").lower()
 
-            # 1. Partner Found -> Send Sticker -> Wait 2s -> Send 🔭
+            # Match found -> Send Sticker -> Wait 2 seconds -> Send 🔭
             if 'partner found' in text or 'ми знайшли вам когось' in text:
-                logger.info("Bot 2 / TasterChatBot: Match found! Fetching most recent sticker...")
+                logger.info("@TasterChatBot: Match found! Fetching most recent sticker...")
                 await asyncio.sleep(1)
 
                 sticker = await self.get_latest_sticker()
@@ -274,19 +260,16 @@ class MultiTargetTelegramPromoBot:
                 else:
                     logger.warning("⚠️ No sticker found in Saved Messages!")
 
-                # Wait exactly two seconds as requested
+                # Wait exactly 2 seconds as requested
                 await asyncio.sleep(2.0)
                 
                 if self.bot2_next_limit_reached:
                     await event.respond('/stop')
                 else:
-                    if 'ми знайшли вам когось' in text:
-                        await event.respond('🔭')
-                        logger.info("✅ Sent '🔭' to end current chat.")
-                    else:
-                        await event.respond('/next')
+                    await event.respond('🔭')
+                    logger.info("✅ Sent '🔭' to end current chat.")
 
-            # 2. Chat ended prompt -> Send 'Так, шукати далі'
+            # Chat ended prompt -> Send 'Так, шукати далі'
             elif any(phrase in text for phrase in [
                 'діалог буде завершено',
                 'шукати наступного',
@@ -296,12 +279,12 @@ class MultiTargetTelegramPromoBot:
                 'your partner has stopped the chat',
                 'type /search to find a new partner'
             ]):
-                logger.info("Bot 2 / TasterChatBot: Dialogue ended. Responding to prompt...")
+                logger.info("@TasterChatBot: Dialogue ended. Responding with 'Так, шукати далі'...")
                 await asyncio.sleep(1)
                 
                 if any(k in text for k in ['діалог', 'шукати', 'співрозмовник']):
                     await event.respond('Так, шукати далі')
-                    logger.info("✅ Sent 'Так, шукати далі' to find the next partner.")
+                    logger.info("✅ Sent 'Так, шукати далі'.")
                 else:
                     await event.respond('/search')
 
@@ -311,7 +294,7 @@ class MultiTargetTelegramPromoBot:
                 await event.respond('/stop')
 
         except Exception as e:
-            logger.error(f"❌ Bot 2 / TasterChatBot error processing message: {str(e)}")
+            logger.error(f"❌ @TasterChatBot error processing message: {str(e)}")
 
     async def get_latest_sticker(self):
         """Fetch the single most recent sticker saved in Saved Messages ('me')"""
@@ -375,9 +358,8 @@ class MultiTargetTelegramPromoBot:
         await site.start()
         logger.info(f"🌐 Health server started on port {PORT}")
 
-# MAIN FUNCTION
 async def main():
-    print("🚀 Starting Multi-Target Telegram Promotional Bot for Render...")
+    print("🚀 Starting Multi-Target Telegram Promotional & Sticker Bot...")
     bot = MultiTargetTelegramPromoBot()
     try:
         await bot.start()
@@ -397,4 +379,4 @@ if __name__ == "__main__":
         asyncio.run(main())
     except KeyboardInterrupt:
         pass
-    
+                
