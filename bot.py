@@ -317,51 +317,73 @@ class MultiTargetTelegramPromoBot:
                 self.statistics.record_error(sender_bot)
 
     async def process_bot2_message(self, event):
-        """Process incoming messages from Bot 2 (Mutual Anonymous Chat) targets"""
+        """Process incoming messages from Bot 2 (Sticker Targets like Anonity, Taster, Defiant)"""
         try:
             text = event.raw_text
 
-            if 'Partner found 😺' in text:
-                logger.info("Bot 2: Partner found.")
+            # Determine the appropriate action commands based on the bot's language
+            next_cmd = '/next'
+            stop_cmd = '/stop'
+            search_cmd = '/search'
+
+            if 'Ми знайшли вам когось' in text or 'Діалог' in text or 'користувач' in text:
+                next_cmd = '🔭'
+                stop_cmd = '⛔️'
+                search_cmd = '🔭'
+
+            # 1. MATCH HANDLER
+            if any(phrase in text for phrase in [
+                'Partner found 😺', 
+                '✨ Partner found! ✨',
+                'Ми знайшли вам когось, можете розпочати спілкування:'
+            ]):
+                logger.info("Bot 2: Partner found. Fetching sticker...")
                 await asyncio.sleep(1)
 
                 stickers = await self.get_stickers()
-                if len(stickers) >= 2:
-                    await self.client.send_file(event.chat_id, stickers[1])
-                elif len(stickers) >= 1:
+                if stickers:
+                    # Send the most recent sticker from saved messages
                     await self.client.send_file(event.chat_id, stickers[0])
 
                 await asyncio.sleep(2)
                 if self.bot2_next_limit_reached:
-                    await event.respond('/stop')
+                    await event.respond(stop_cmd)
                 else:
-                    await event.respond('/next')
+                    await event.respond(next_cmd)
 
+            # 2. DISCONNECT / END OF CHAT HANDLER
             elif any(phrase in text for phrase in [
                 'You stopped the chat',
-                'Your partner has stopped the chat',
-                'Type /search to find a new partner'
+                'Your partner has stopped',
+                'Your partner stopped the chat',
+                'Your partner has left the chat',
+                'Type /search to find a new partner',
+                'Інший користувач ⛔ завершив діалог',
+                'Діалог буде завершено',
+                'Шукати наступного 🔭 співрозмовника?'
             ]):
-                logger.info("Bot 2: Chat ended properly. Searching...")
+                logger.info("Bot 2: Chat ended properly. Initiating search...")
                 await asyncio.sleep(1)
-                await event.respond('/search')
+                await event.respond(search_cmd)
 
-            elif "daily /next limit" in text:
+            # 3. RATE LIMIT HANDLER
+            elif "daily /next limit" in text.lower():
                 self.bot2_next_limit_reached = True
                 await asyncio.sleep(1)
-                await event.respond('/stop')
+                await event.respond(stop_cmd)
 
         except Exception as e:
             logger.error(f"❌ Bot 2 error processing message: {str(e)}")
 
     async def get_stickers(self):
-        """Fetch stickers from saved messages (Bot 2 helper)"""
+        """Fetch the most recent sticker from saved messages (Bot 2 helper)"""
         stickers = []
         try:
+            # Iterating through 'me' fetches messages from Saved Messages[span_1](start_span)[span_1](end_span)
             async for message in self.client.iter_messages('me', limit=30):
                 if message.sticker:
                     stickers.append(message.document)
-                if len(stickers) >= 2:
+                if len(stickers) >= 1: # Reduced to fetch only the 1 most recent
                     break
         except Exception as e:
             logger.error(f"Error fetching stickers: {e}")
@@ -475,4 +497,3 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"❌ Error: {e}")
         time.sleep(60)
-    
