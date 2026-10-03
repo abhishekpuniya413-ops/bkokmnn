@@ -603,6 +603,7 @@ class MultiTargetTelegramPromoBot:
                     return
 
             # Match found: wait 2s -> send profile -> wait 2s -> send end chat.
+            # Match found: wait 4s -> send profile -> wait 6.5s (10.5s total) -> send end chat.
             if any(phrase in text for phrase in MELOGAP_MATCH_PHRASES):
                 if self.melogap_state != 'SEARCHING':
                     return
@@ -613,20 +614,20 @@ class MultiTargetTelegramPromoBot:
                     self.melogap_state = 'MATCHED'
                     logger.info(f"🎯 {MELOGAP_BOT}: partner found")
 
-                    await asyncio.sleep(2.0)
+                    # Wait 4.0 seconds after being connected
+                    await asyncio.sleep(4.0)
 
-                    # Sometimes say a simple greeting; most matches remain silent.
+                    # Optional greeting
                     if random.random() < MELOGAP_GREETING_PROBABILITY:
                         greeting = random.choice(MELOGAP_GREETING_MESSAGES)
                         await self.client.send_message(self.melogap_bot_entity, greeting)
                         logger.info(f"💬 {MELOGAP_BOT}: sent optional greeting: {greeting!r}")
-                    else:
-                        logger.info(f"🤐 {MELOGAP_BOT}: no greeting this match")
 
                     await self.client.send_message(self.melogap_bot_entity, MELOGAP_PROFILE_TEXT)
                     logger.info(f"👤 {MELOGAP_BOT}: sent profile request")
 
-                    await asyncio.sleep(2.0)
+                    # Wait 6.5 seconds so total elapsed time exceeds MeloGap's 10-second rule
+                    await asyncio.sleep(6.5)
                     await self.client.send_message(self.melogap_bot_entity, MELOGAP_END_TEXT)
                     self.melogap_state = 'ENDING'
                     logger.info(f"🚪 {MELOGAP_BOT}: sent end-chat request")
