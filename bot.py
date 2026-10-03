@@ -638,123 +638,44 @@ class MultiTargetTelegramPromoBot:
             #   اتمام چت❌
             # Only click the explicit "اتمام چت" button. Never blindly click
             # the first button because that can choose "ادامه ی چت".
-            elif self.melogap_state == 'ENDING' and "مطمئنی" in text:
-                logger.info("📍 End chat confirmation detected. Fetching buttons...")
+             elif self.melogap_state == 'ENDING' and "مطمئنی" in text:
+                logger.info("📍 End chat confirmation detected. Clicking inline button...")
                 async with self.melogap_action_lock:
                     if self.melogap_state != 'ENDING':
                         return
 
+                    # Wait briefly for buttons to fully load onto the message
                     await asyncio.sleep(0.5)
 
-                    # Re-fetch the exact confirmation message so we use its
-                    # current callback data rather than a stale Message object.
+                    # Re-fetch the message to guarantee the inline buttons are attached
                     msg = await self.client.get_messages(
                         self.melogap_bot_entity,
                         ids=event.message.id
                     )
 
-                    if not msg or not msg.buttons:
-                        logger.warning(
-                            f"⚠️ {MELOGAP_BOT}: confirmation message has no buttons"
-                        )
+                    if not msg or not getattr(msg, 'buttons', None):
+                        logger.warning(f"⚠️ {MELOGAP_BOT}: confirmation message has no buttons")
                         return
 
-                    clicked = False
-                    end_keywords = ('اتمام چت', 'ببند', '❌')
-
-                    for row_index, row in enumerate(msg.buttons):
-                        for col_index, button in enumerate(row):
-                            button_text = str(getattr(button, 'text', '') or '').strip()
-                            normalized_button_text = button_text.replace(' ', '').replace('‌', '')
-
-                            logger.info(
-                                f"🔘 {MELOGAP_BOT}: confirmation button "
-                                f"[{row_index},{col_index}] = {button_text!r}"
-                            )
-
-                            if not any(
-                                keyword.replace(' ', '') in normalized_button_text
-                                for keyword in end_keywords
-                            ):
-                                continue
-
-                            # First use the exact method you provided.
-                            try:
-                                await button.click()
-                                clicked = True
-                                logger.info(
-                                    f"✅ {MELOGAP_BOT}: clicked end button: [{button_text}]"
-                                )
-                                break
-                            except Exception as click_error:
-                                logger.warning(
-                                    f"⚠️ {MELOGAP_BOT}: button.click() failed for "
-                                    f"[{button_text}]: {click_error}"
-                                )
-
-                            # Inline callback fallback: send the button's actual
-                            # callback data directly. This avoids relying on the
-                            # MessageButton wrapper when Telegram's client-side
-                            # click helper fails.
-                            callback_data = getattr(button, 'data', None)
-                            if callback_data:
-                                try:
-                                    await self.client(
-                                        functions.messages.GetBotCallbackAnswerRequest(
-                                            peer=self.melogap_bot_entity,
-                                            msg_id=msg.id,
-                                            data=callback_data
-                                        )
-                                    )
-                                    clicked = True
-                                    logger.info(
-                                        f"✅ {MELOGAP_BOT}: clicked end button via callback: "
-                                        f"[{button_text}]"
-                                    )
-                                    break
-                                except Exception as callback_error:
-                                    logger.warning(
-                                        f"⚠️ {MELOGAP_BOT}: callback click failed for "
-                                        f"[{button_text}]: {callback_error}"
-                                    )
-
-                            # Last exact-position fallback, still on the matched
-                            # END button only — never the first arbitrary button.
-                            try:
-                                await msg.click(i=row_index, j=col_index)
-                                clicked = True
-                                logger.info(
-                                    f"✅ {MELOGAP_BOT}: clicked end button by position: "
-                                    f"[{row_index},{col_index}]"
-                                )
-                                break
-                            except Exception as position_error:
-                                logger.warning(
-                                    f"⚠️ {MELOGAP_BOT}: position click failed for "
-                                    f"[{button_text}]: {position_error}"
-                                )
-
-                        if clicked:
-                            break
-
-                    if not clicked:
-                        logger.error(
-                            f"❌ {MELOGAP_BOT}: found confirmation but could not click "
-                            "the explicit 'اتمام چت❌' button. NOT starting next cycle."
-                        )
+                    # Use Telethon's built-in text search to click the inline button directly
+                    try:
+                        await msg.click(text='اتمام چت')
+                        logger.info(f"✅ {MELOGAP_BOT}: Successfully clicked the inline end button")
+                    except Exception as click_error:
+                        logger.error(f"❌ {MELOGAP_BOT}: Failed to click inline button: {click_error}")
                         return
 
+                    # Give the bot time to process the disconnection on its server
                     self.melogap_state = 'REQUESTING'
-                    await asyncio.sleep(1.0)
+                    await asyncio.sleep(2.5) 
+                    
                     await self.client.send_message(
                         self.melogap_bot_entity,
                         MELOGAP_CONNECT_TEXT
                     )
-                    logger.info(
-                        f"🔄 {MELOGAP_BOT}: confirmation clicked; starting next cycle"
-                    )
+                    logger.info(f"🔄 {MELOGAP_BOT}: confirmation clicked; starting next cycle")
                 return
-
+        
             # If the partner ends first, restart the same connect -> search cycle.
             if any(phrase in text for phrase in MELOGAP_CHAT_END_PHRASES):
                 if self.melogap_state in ('REQUESTING', 'SEARCHING'):
