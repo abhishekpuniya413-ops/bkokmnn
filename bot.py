@@ -638,7 +638,7 @@ class MultiTargetTelegramPromoBot:
             #   اتمام چت❌
             # Only click the explicit "اتمام چت" button. Never blindly click
             # the first button because that can choose "ادامه ی چت".
-             elif self.melogap_state == 'ENDING' and "مطمئنی" in text:
+            elif self.melogap_state == 'ENDING' and "مطمئنی" in text:
                 logger.info("📍 End chat confirmation detected. Clicking inline button...")
                 async with self.melogap_action_lock:
                     if self.melogap_state != 'ENDING':
@@ -675,7 +675,7 @@ class MultiTargetTelegramPromoBot:
                     )
                     logger.info(f"🔄 {MELOGAP_BOT}: confirmation clicked; starting next cycle")
                 return
-        
+                 
             # If the partner ends first, restart the same connect -> search cycle.
             if any(phrase in text for phrase in MELOGAP_CHAT_END_PHRASES):
                 if self.melogap_state in ('REQUESTING', 'SEARCHING'):
